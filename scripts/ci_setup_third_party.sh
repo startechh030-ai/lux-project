@@ -286,3 +286,4 @@ for lib in miniaudio libsodium ozz-animation filament nakama-cpp; do
     headers=$(find "$THIRD_PARTY_DIR/$lib" -name '*.h' -o -name '*.hpp' 2>/dev/null | wc -l)
     echo "  $lib: $found .so files, $headers header files"
 done
+#All for now... 
