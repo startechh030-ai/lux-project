@@ -1,0 +1,7 @@
+# Ignore everything in third_party except .gitignore and .gitkeep
+*
+!.gitignore
+!.gitkeep
+!README.md
+
+# But DO track the setup scripts (they're under scripts/, not here)

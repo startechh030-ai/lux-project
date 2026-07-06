@@ -1,0 +1,191 @@
+# =============================================================================
+# Lux Engine - Android CI Build (GitHub Actions)
+# Builds liblux.so for arm64-v8a, armeabi-v7a, x86_64
+# and optionally packages the Android APK.
+# =============================================================================
+name: Android Build
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build type'
+        default: 'Debug'
+        type: choice
+        options:
+          - Debug
+          - Release
+      upload_apk:
+        description: 'Upload APK artifact'
+        default: false
+        type: boolean
+
+env:
+  BUILD_TYPE: ${{ github.event.inputs.build_type || 'Debug' }}
+  NDK_VERSION: '27.0.12077973'
+
+jobs:
+  build-native:
+    name: Build liblux.so (${{ matrix.abi }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        abi: [arm64-v8a, armeabi-v7a, x86_64]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Android NDK
+        run: |
+          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/$NDK_VERSION" >> $GITHUB_ENV
+          echo "ANDROID_NDK=$ANDROID_SDK_ROOT/ndk/$NDK_VERSION" >> $GITHUB_ENV
+
+      - name: Install build prerequisites
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ninja-build cmake curl unzip git-lfs
+
+      - name: Cache third-party dependencies
+        uses: actions/cache@v4
+        id: cache-third-party
+        with:
+          path: |
+            third_party/miniaudio
+            third_party/libsodium
+            third_party/ozz-animation
+            third_party/filament
+            third_party/nakama-cpp
+          key: ${{ runner.os }}-third-party-${{ hashFiles('scripts/ci_setup_third_party.sh') }}
+
+      - name: Setup third-party dependencies
+        if: steps.cache-third-party.outputs.cache-hit != 'true'
+        run: |
+          chmod +x scripts/ci_setup_third_party.sh
+          ./scripts/ci_setup_third_party.sh $BUILD_TYPE
+        env:
+          ANDROID_NDK: ${{ env.ANDROID_NDK_HOME }}
+
+      - name: Verify third-party dependencies
+        run: |
+          echo "=== Third-party status ==="
+          for dir in miniaudio libsodium ozz-animation filament nakama-cpp; do
+            so_count=$(find third_party/$dir -name '*.so' 2>/dev/null | wc -l)
+            h_count=$(find third_party/$dir -name '*.h' -o -name '*.hpp' 2>/dev/null | wc -l)
+            echo "  $dir: $so_count .so files, $h_count headers"
+          done
+          echo "=== Miniaudio header ==="
+          wc -c third_party/miniaudio/miniaudio.h 2>/dev/null || echo "(header not found)"
+
+      - name: Configure CMake
+        run: |
+          cmake -B build/${{ matrix.abi }} \
+            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=${{ matrix.abi }} \
+            -DANDROID_PLATFORM=android-26 \
+            -DANDROID_STL=c++_shared \
+            -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
+            -DLUX_BUILD_TESTS=OFF \
+            -G Ninja
+
+      - name: Build
+        run: cmake --build build/${{ matrix.abi }} --target lux_shared --parallel $(nproc)
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p artifacts/${{ matrix.abi }}
+          cp build/${{ matrix.abi }}/lux/liblux_shared.so artifacts/${{ matrix.abi }}/
+
+      - name: Upload .so artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: liblux-${{ matrix.abi }}
+          path: artifacts/${{ matrix.abi }}/liblux_shared.so
+
+  build-android-apk:
+    name: Build Android APK
+    needs: build-native
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event.inputs.upload_apk == 'true'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all .so artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: android/app/src/main/jniLibs/
+
+      - name: Restructure JNI libs
+        run: |
+          # Move artifacts from artifact-named folders to ABI-named folders
+          for dir in android/app/src/main/jniLibs/*/; do
+            abi=$(basename "$dir" | sed 's/liblux-//')
+            if [ ! -d "android/app/src/main/jniLibs/$abi" ]; then
+              mkdir -p "android/app/src/main/jniLibs/$abi"
+            fi
+            cp "$dir"/*.so "android/app/src/main/jniLibs/$abi/" 2>/dev/null || true
+          done
+          # Clean up artifact-named folders
+          for dir in android/app/src/main/jniLibs/liblux-*/; do
+            [ -d "$dir" ] && rm -rf "$dir"
+          done
+          echo "JNI libs structure:"
+          find android/app/src/main/jniLibs -type f 2>/dev/null || echo "(no libs yet)"
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Build APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: lux-engine-apk
+          path: android/app/build/outputs/apk/debug/*.apk
+
+  lint:
+    name: Code quality checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run clang-format check
+        uses: jidicula/clang-format-action@v4.11.0
+        with:
+          clang-format-version: '17'
+          check-path: 'lux'
+          include-regex: '.*\.(h|hpp|cpp)$'
+
+      - name: Run CMake lint
+        run: |
+          pip install cmake-lint
+          find . -name CMakeLists.txt -o -name '*.cmake' | xargs cmake-lint

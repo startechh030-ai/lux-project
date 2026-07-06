@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Lux Engine</string>
+    <string name="menu_title">Mini-Games</string>
+    <string name="settings">Settings</string>
+    <string name="play">Play</string>
+    <string name="auth_connecting">Connecting…</string>
+    <string name="auth_offline">Offline mode</string>
+    <string name="auth_online">Online — %s</string>
+</resources>
