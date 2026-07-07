@@ -40,7 +40,7 @@ dependencies {
     implementation("androidx.activity:activity-ktx:1.9.3")
 
     // Filament runtime + helpers. If your local project already pins Filament, change only this version.
-    val filamentVersion = "1.54.4"
+    val filamentVersion = "1.72.0"
     implementation("com.google.android.filament:filament-android:$filamentVersion")
     implementation("com.google.android.filament:gltfio-android:$filamentVersion")
     implementation("com.google.android.filament:filament-utils-android:$filamentVersion")
