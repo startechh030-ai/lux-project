@@ -1,9 +1,16 @@
 <resources>
+    <!-- Keep this dependency-free: no AppCompat and no AndroidX splashscreen attrs. -->
     <style name="AppTheme" parent="android:style/Theme.Material.NoActionBar">
         <item name="android:fontFamily">sans</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:navigationBarColor">#101216</item>
         <item name="android:statusBarColor">#101216</item>
         <item name="android:colorAccent">#7C5CFF</item>
+        <item name="android:windowBackground">#101216</item>
     </style>
+
+    <!-- Compatibility aliases in case AndroidManifest or template files reference these. -->
+    <style name="Theme.TexturePaintMobile" parent="AppTheme" />
+    <style name="Theme.LuxProject" parent="AppTheme" />
+    <style name="Theme.App" parent="AppTheme" />
 </resources>

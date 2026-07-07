@@ -205,9 +205,9 @@ Java_com_arena_texturepaint_NativeTextureCore_unwrapAuto(JNIEnv*, jobject, jlong
     decl.indexData = mesh.indices.data();
     decl.indexFormat = xatlas::IndexFormat::UInt32;
 
-    xatlas::AddMeshError::Enum err = xatlas::AddMesh(atlas, decl);
-    if (err != xatlas::AddMeshError::Success) {
-        LOGE("xatlas AddMesh failed: %s", xatlas::StringForEnum(err));
+    xatlas::AddMeshError addMeshError = xatlas::AddMesh(atlas, decl);
+    if (addMeshError != xatlas::AddMeshError::Success) {
+        LOGE("xatlas AddMesh failed: %s", xatlas::StringForEnum(addMeshError));
         xatlas::Destroy(atlas);
         return JNI_FALSE;
     }
