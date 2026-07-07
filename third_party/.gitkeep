@@ -1,2 +1,0 @@
-# Third-party dependencies are downloaded/built by scripts/setup_third_party.sh
-# This directory is gitignored; the .gitkeep preserves the directory structure.
