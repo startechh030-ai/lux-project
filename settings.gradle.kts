@@ -12,5 +12,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "TexturePaintMobile"
+rootProject.name = "SimpleGlbViewer"
 include(":app")
