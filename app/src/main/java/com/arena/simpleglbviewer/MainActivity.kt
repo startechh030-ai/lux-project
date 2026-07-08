@@ -16,6 +16,8 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import com.google.android.filament.Engine
+import com.google.android.filament.EntityManager
+import com.google.android.filament.LightManager
 import com.google.android.filament.Skybox
 import com.google.android.filament.utils.ModelViewer
 import com.google.android.filament.utils.Utils
@@ -28,6 +30,8 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
     private lateinit var surfaceView: SurfaceView
     private lateinit var modelViewer: ModelViewer
     private lateinit var statusText: TextView
+    private lateinit var axisGizmoView: AxisGizmoView
+    private val cameraController = CameraController()
 
     private val pickGlb = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
@@ -47,6 +51,9 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
         root.setBackgroundColor(Color.rgb(16, 18, 22))
 
         surfaceView = SurfaceView(this)
+        surfaceView.setOnTouchListener { view, event ->
+            cameraController.onTouch(event, view.width, view.height)
+        }
         root.addView(surfaceView, FrameLayout.LayoutParams(-1, -1))
 
         val pickButton = ImageButton(this).apply {
@@ -58,11 +65,19 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
             setOnClickListener { openFilePicker() }
         }
         val buttonSize = (64 * resources.displayMetrics.density).toInt()
-        val buttonParams = FrameLayout.LayoutParams(buttonSize, buttonSize, Gravity.TOP or Gravity.END).apply {
+        val buttonParams = FrameLayout.LayoutParams(buttonSize, buttonSize, Gravity.TOP or Gravity.START).apply {
             topMargin = (24 * resources.displayMetrics.density).toInt()
-            rightMargin = (18 * resources.displayMetrics.density).toInt()
+            leftMargin = (18 * resources.displayMetrics.density).toInt()
         }
         root.addView(pickButton, buttonParams)
+
+        axisGizmoView = AxisGizmoView(this)
+        val gizmoSize = (118 * resources.displayMetrics.density).toInt()
+        val gizmoParams = FrameLayout.LayoutParams(gizmoSize, gizmoSize, Gravity.TOP or Gravity.END).apply {
+            topMargin = (14 * resources.displayMetrics.density).toInt()
+            rightMargin = (14 * resources.displayMetrics.density).toInt()
+        }
+        root.addView(axisGizmoView, gizmoParams)
 
         statusText = TextView(this).apply {
             text = "Tap the icon to pick a .glb file"
@@ -80,8 +95,18 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
         val engine = Engine.create()
         modelViewer = ModelViewer(surfaceView, engine)
         modelViewer.scene.skybox = Skybox.Builder()
-            .color(0.055f, 0.062f, 0.078f, 1.0f)
+            .color(0.075f, 0.083f, 0.105f, 1.0f)
             .build(engine)
+
+        // Soft main light so imported GLBs do not appear flat/dark.
+        val sun = EntityManager.get().create()
+        LightManager.Builder(LightManager.Type.SUN)
+            .color(1.0f, 0.96f, 0.88f)
+            .intensity(95_000.0f)
+            .direction(0.35f, -0.7f, -0.45f)
+            .castShadows(true)
+            .build(engine, sun)
+        modelViewer.scene.addEntity(sun)
     }
 
     override fun onResume() {
@@ -95,7 +120,13 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
     }
 
     override fun doFrame(frameTimeNanos: Long) {
-        if (::modelViewer.isInitialized) {
+        if (::modelViewer.isInitialized && surfaceView.width > 0 && surfaceView.height > 0) {
+            val aspect = surfaceView.width.toDouble() / surfaceView.height.toDouble()
+            cameraController.apply(modelViewer.camera, aspect)
+            if (::axisGizmoView.isInitialized) {
+                axisGizmoView.yaw = cameraController.yaw
+                axisGizmoView.pitch = cameraController.pitch
+            }
             modelViewer.render(frameTimeNanos)
         }
         Choreographer.getInstance().postFrameCallback(this)
@@ -127,8 +158,9 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
             modelViewer.destroyModel()
             modelViewer.loadModelGlb(buffer)
             modelViewer.transformToUnitCube()
+            cameraController.reset()
 
-            statusText.text = "Loaded: $name"
+            statusText.text = "Loaded: $name | 1 finger rotate, pinch zoom, 2 fingers move"
         }.onFailure { error ->
             statusText.text = "Failed to load GLB"
             Toast.makeText(this, error.message ?: "Unknown error", Toast.LENGTH_LONG).show()

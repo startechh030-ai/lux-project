@@ -1,12 +1,25 @@
 # SimpleGlbViewer
 
-Minimal first milestone:
+Current milestone:
 
 ```txt
-App opens → user taps file picker icon → selects .glb → Filament renders it
+App opens landscape
+→ user taps file picker icon
+→ selects .glb
+→ Filament renders it
+→ 1 finger rotates camera
+→ pinch zooms / pulls out
+→ 2 finger drag pans/moves model on screen
+→ axis gizmo stays top-right
 ```
 
-No JNI. No xatlas. No painting. No export.
+No JNI, no xatlas, no export yet.
+
+## Gesture controls
+
+- **1 finger drag:** rotate/orbit camera
+- **2 finger pinch:** zoom in/out
+- **2 finger drag together:** pan model left/right/up/down without rotating
 
 ## Build
 
