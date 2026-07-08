@@ -5,8 +5,7 @@
         android:allowBackup="true"
         android:label="Simple GLB Viewer"
         android:theme="@style/AppTheme"
-        android:icon="@mipmap/ic_launcher"
-        android:roundIcon="@mipmap/ic_launcher_round">
+        android:icon="@mipmap/ic_launcher">
         <activity
             android:name=".MainActivity"
             android:screenOrientation="portrait"
