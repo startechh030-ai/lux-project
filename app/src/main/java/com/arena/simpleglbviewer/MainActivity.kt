@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
+import android.view.Choreographer
 import android.view.Gravity
 import android.view.SurfaceView
 import android.widget.FrameLayout
@@ -17,11 +18,12 @@ import androidx.activity.result.contract.ActivityResultContracts
 import com.google.android.filament.Engine
 import com.google.android.filament.Skybox
 import com.google.android.filament.utils.ModelViewer
+import com.google.android.filament.utils.Utils
 import java.io.File
 import java.io.FileOutputStream
 import java.nio.ByteBuffer
 
-class MainActivity : ComponentActivity() {
+class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
     private lateinit var root: FrameLayout
     private lateinit var surfaceView: SurfaceView
     private lateinit var modelViewer: ModelViewer
@@ -35,6 +37,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Utils.init()
         buildUi()
         setupFilament()
     }
@@ -79,6 +82,23 @@ class MainActivity : ComponentActivity() {
         modelViewer.scene.skybox = Skybox.Builder()
             .color(0.055f, 0.062f, 0.078f, 1.0f)
             .build(engine)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        Choreographer.getInstance().postFrameCallback(this)
+    }
+
+    override fun onPause() {
+        Choreographer.getInstance().removeFrameCallback(this)
+        super.onPause()
+    }
+
+    override fun doFrame(frameTimeNanos: Long) {
+        if (::modelViewer.isInitialized) {
+            modelViewer.render(frameTimeNanos)
+        }
+        Choreographer.getInstance().postFrameCallback(this)
     }
 
     private fun openFilePicker() {
