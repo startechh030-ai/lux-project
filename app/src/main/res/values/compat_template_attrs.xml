@@ -1,0 +1,7 @@
+<resources>
+    <!-- AndroidX SplashScreen template attrs shim. Remove when using androidx.core:core-splashscreen. -->
+    <attr name="windowSplashScreenBackground" format="color|reference" />
+    <attr name="windowSplashScreenAnimatedIcon" format="reference" />
+    <attr name="windowSplashScreenIconBackgroundColor" format="color|reference" />
+    <attr name="postSplashScreenTheme" format="reference" />
+</resources>

@@ -1,0 +1,10 @@
+<resources>
+    <!--
+        Build-only compatibility shims for Android Studio template styles.
+        These prevent resource linking errors if leftover themes.xml references
+        Theme.AppCompat.NoActionBar or Theme.SplashScreen while we are not yet
+        pulling appcompat/core-splashscreen dependencies.
+    -->
+    <style name="Theme.AppCompat.NoActionBar" parent="android:style/Theme.Material.NoActionBar" />
+    <style name="Theme.SplashScreen" parent="android:style/Theme.Material.NoActionBar" />
+</resources>
