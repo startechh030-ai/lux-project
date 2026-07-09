@@ -28,10 +28,12 @@ import java.nio.ByteBuffer
 class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
     private lateinit var root: FrameLayout
     private lateinit var surfaceView: SurfaceView
+    private lateinit var engine: Engine
     private lateinit var modelViewer: ModelViewer
     private lateinit var statusText: TextView
     private lateinit var axisGizmoView: AxisGizmoView
     private val cameraController = CameraController()
+    private var baseModelTransform: FloatArray? = null
 
     private val pickGlb = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
@@ -92,7 +94,7 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
     }
 
     private fun setupFilament() {
-        val engine = Engine.create()
+        engine = Engine.create()
         modelViewer = ModelViewer(surfaceView, engine)
         modelViewer.scene.skybox = Skybox.Builder()
             .color(0.075f, 0.083f, 0.105f, 1.0f)
@@ -127,6 +129,7 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
                 axisGizmoView.yaw = cameraController.yaw
                 axisGizmoView.pitch = cameraController.pitch
             }
+            applyLoadedModelTransform()
             modelViewer.render(frameTimeNanos)
         }
         Choreographer.getInstance().postFrameCallback(this)
@@ -158,6 +161,7 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
             modelViewer.destroyModel()
             modelViewer.loadModelGlb(buffer)
             modelViewer.transformToUnitCube()
+            captureBaseModelTransform()
             cameraController.reset()
 
             statusText.text = "Loaded: $name | 1 finger rotate, pinch zoom, 2 fingers move"
@@ -165,6 +169,41 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
             statusText.text = "Failed to load GLB"
             Toast.makeText(this, error.message ?: "Unknown error", Toast.LENGTH_LONG).show()
         }
+    }
+
+    private fun captureBaseModelTransform() {
+        val asset = modelViewer.asset ?: run {
+            baseModelTransform = null
+            return
+        }
+        val tm = engine.transformManager
+        val instance = tm.getInstance(asset.root)
+        baseModelTransform = FloatArray(16).also { base ->
+            tm.getTransform(instance, base)
+        }
+    }
+
+    private fun applyLoadedModelTransform() {
+        val asset = modelViewer.asset ?: return
+        val base = baseModelTransform ?: return
+        val tm = engine.transformManager
+        val instance = tm.getInstance(asset.root)
+        val finalTransform = multiplyColumnMajor(cameraController.modelTransform(), base)
+        tm.setTransform(instance, finalTransform)
+    }
+
+    private fun multiplyColumnMajor(a: FloatArray, b: FloatArray): FloatArray {
+        val out = FloatArray(16)
+        for (col in 0..3) {
+            for (row in 0..3) {
+                out[col * 4 + row] =
+                    a[0 * 4 + row] * b[col * 4 + 0] +
+                    a[1 * 4 + row] * b[col * 4 + 1] +
+                    a[2 * 4 + row] * b[col * 4 + 2] +
+                    a[3 * 4 + row] * b[col * 4 + 3]
+            }
+        }
+        return out
     }
 
     private fun copyUriToCache(uri: Uri, fileName: String): File {

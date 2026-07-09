@@ -3,17 +3,15 @@ package com.arena.simpleglbviewer
 import android.view.MotionEvent
 import com.google.android.filament.Camera
 import kotlin.math.PI
-import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.max
-import kotlin.math.min
 import kotlin.math.sin
 import kotlin.math.sqrt
 
 class CameraController {
-    var yaw = 0.65f
+    var yaw = 0f
         private set
-    var pitch = -0.35f
+    var pitch = 0f
         private set
     var distance = 3.0f
         private set
@@ -30,8 +28,8 @@ class CameraController {
     private var lastPointerCount = 0
 
     fun reset() {
-        yaw = 0.65f
-        pitch = -0.35f
+        yaw = 0f
+        pitch = 0f
         distance = 3.0f
         targetX = 0f
         targetY = 0f
@@ -91,16 +89,30 @@ class CameraController {
     }
 
     fun apply(camera: Camera, aspect: Double) {
-        val cp = cos(pitch)
-        val eyeX = targetX + distance * cp * sin(yaw)
-        val eyeY = targetY + distance * sin(pitch)
-        val eyeZ = targetZ + distance * cp * cos(yaw)
-
+        // Keep the camera stable. We apply touch movement to the loaded model root
+        // because Filament's ModelViewer utility can overwrite custom camera changes.
         camera.setProjection(45.0, aspect, 0.05, 1000.0, Camera.Fov.VERTICAL)
         camera.lookAt(
-            eyeX.toDouble(), eyeY.toDouble(), eyeZ.toDouble(),
-            targetX.toDouble(), targetY.toDouble(), targetZ.toDouble(),
+            0.0, 0.0, 3.0,
+            0.0, 0.0, 0.0,
             0.0, 1.0, 0.0
+        )
+    }
+
+    fun modelTransform(): FloatArray {
+        val safeDistance = distance.coerceIn(0.65f, 50f)
+        val s = (3.0f / safeDistance).coerceIn(0.06f, 4.5f)
+        val cy = cos(yaw)
+        val sy = sin(yaw)
+        val cp = cos(pitch)
+        val sp = sin(pitch)
+
+        // Column-major matrix: T * Ry * Rx * S
+        return floatArrayOf(
+            cy * s,        0f,      -sy * s,       0f,
+            sy * sp * s,   cp * s,   cy * sp * s,  0f,
+            sy * cp * s,  -sp * s,   cy * cp * s,  0f,
+            targetX,       targetY,  targetZ,      1f
         )
     }
 
@@ -113,22 +125,9 @@ class CameraController {
 
     private fun pan(dx: Float, dy: Float, viewWidth: Int, viewHeight: Int) {
         val scale = distance * 1.45f / max(1, viewHeight)
-
-        // Camera right vector from yaw.
-        val rightX = cos(yaw)
-        val rightZ = -sin(yaw)
-
-        // Approx camera up vector from yaw/pitch.
-        val forwardX = -cos(pitch) * sin(yaw)
-        val forwardY = -sin(pitch)
-        val forwardZ = -cos(pitch) * cos(yaw)
-        val up = cross(rightX, 0f, rightZ, forwardX, forwardY, forwardZ)
-
-        targetX -= rightX * dx * scale
-        targetZ -= rightZ * dx * scale
-        targetX += up.x * dy * scale
-        targetY += up.y * dy * scale
-        targetZ += up.z * dy * scale
+        // Two-finger drag should move the model in screen-space only. No rotation.
+        targetX += dx * scale
+        targetY -= dy * scale
     }
 
     private fun capture(event: MotionEvent) {
@@ -148,19 +147,4 @@ class CameraController {
         return sqrt(dx * dx + dy * dy)
     }
 
-    private fun cross(ax: Float, ay: Float, az: Float, bx: Float, by: Float, bz: Float): Vec3 {
-        return Vec3(
-            ay * bz - az * by,
-            az * bx - ax * bz,
-            ax * by - ay * bx
-        ).normalized()
-    }
-
-    private data class Vec3(val x: Float, val y: Float, val z: Float) {
-        fun normalized(): Vec3 {
-            val len = sqrt(x * x + y * y + z * z)
-            if (len <= 0.00001f) return Vec3(0f, 1f, 0f)
-            return Vec3(x / len, y / len, z / len)
-        }
-    }
 }
