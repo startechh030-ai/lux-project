@@ -32,8 +32,8 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
     private lateinit var modelViewer: ModelViewer
     private lateinit var statusText: TextView
     private lateinit var axisGizmoView: AxisGizmoView
-    private val cameraController = CameraController()
-    private var baseModelTransform: FloatArray? = null
+    private lateinit var gestureHandler: NativeCameraGestureHandler
+    private var lastFrameTimeNanos: Long = 0L
 
     private val pickGlb = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
@@ -44,6 +44,8 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Utils.init()
+        NativeCamera.init()
+        gestureHandler = NativeCameraGestureHandler(this)
         buildUi()
         setupFilament()
     }
@@ -53,10 +55,16 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
         root.setBackgroundColor(Color.rgb(16, 18, 22))
 
         surfaceView = SurfaceView(this)
-        surfaceView.setOnTouchListener { view, event ->
-            cameraController.onTouch(event, view.width, view.height)
+        surfaceView.setOnTouchListener { _, event ->
+            gestureHandler.onTouchEvent(event)
         }
         root.addView(surfaceView, FrameLayout.LayoutParams(-1, -1))
+
+        val chromeView = EditorChromeView(this).apply {
+            isClickable = false
+            isFocusable = false
+        }
+        root.addView(chromeView, FrameLayout.LayoutParams(-1, -1))
 
         val pickButton = ImageButton(this).apply {
             setImageResource(android.R.drawable.ic_menu_upload)
@@ -121,18 +129,38 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
         super.onPause()
     }
 
+    override fun onDestroy() {
+        NativeCamera.destroy()
+        super.onDestroy()
+    }
+
     override fun doFrame(frameTimeNanos: Long) {
         if (::modelViewer.isInitialized && surfaceView.width > 0 && surfaceView.height > 0) {
+            val delta = if (lastFrameTimeNanos == 0L) 1f / 60f
+            else ((frameTimeNanos - lastFrameTimeNanos) / 1_000_000_000f).coerceIn(0.001f, 0.08f)
+            lastFrameTimeNanos = frameTimeNanos
+
             val aspect = surfaceView.width.toDouble() / surfaceView.height.toDouble()
-            cameraController.apply(modelViewer.camera, aspect)
-            if (::axisGizmoView.isInitialized) {
-                axisGizmoView.yaw = cameraController.yaw
-                axisGizmoView.pitch = cameraController.pitch
-            }
-            applyLoadedModelTransform()
+            NativeCamera.setScreenSize(surfaceView.width, surfaceView.height)
+            NativeCamera.update(delta)
+            applyNativeCamera(aspect)
             modelViewer.render(frameTimeNanos)
         }
         Choreographer.getInstance().postFrameCallback(this)
+    }
+
+    private fun applyNativeCamera(aspect: Double) {
+        val c = NativeCamera.getCameraState()
+        modelViewer.camera.setProjection(45.0, aspect, 0.05, 1000.0, com.google.android.filament.Camera.Fov.VERTICAL)
+        modelViewer.camera.lookAt(
+            c[0].toDouble(), c[1].toDouble(), c[2].toDouble(),
+            c[3].toDouble(), c[4].toDouble(), c[5].toDouble(),
+            c[6].toDouble(), c[7].toDouble(), c[8].toDouble()
+        )
+        if (::axisGizmoView.isInitialized) {
+            axisGizmoView.yaw = c[9]
+            axisGizmoView.pitch = c[10]
+        }
     }
 
     private fun openFilePicker() {
@@ -161,49 +189,14 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
             modelViewer.destroyModel()
             modelViewer.loadModelGlb(buffer)
             modelViewer.transformToUnitCube()
-            captureBaseModelTransform()
-            cameraController.reset()
+            NativeCamera.reset(0f, 0f, 0f, 1f)
+            lastFrameTimeNanos = 0L
 
-            statusText.text = "Loaded: $name | 1 finger rotate, pinch zoom, 2 fingers move"
+            statusText.text = "Loaded: $name | 1 finger orbit, pinch zoom, 2 fingers pan"
         }.onFailure { error ->
             statusText.text = "Failed to load GLB"
             Toast.makeText(this, error.message ?: "Unknown error", Toast.LENGTH_LONG).show()
         }
-    }
-
-    private fun captureBaseModelTransform() {
-        val asset = modelViewer.asset ?: run {
-            baseModelTransform = null
-            return
-        }
-        val tm = engine.transformManager
-        val instance = tm.getInstance(asset.root)
-        baseModelTransform = FloatArray(16).also { base ->
-            tm.getTransform(instance, base)
-        }
-    }
-
-    private fun applyLoadedModelTransform() {
-        val asset = modelViewer.asset ?: return
-        val base = baseModelTransform ?: return
-        val tm = engine.transformManager
-        val instance = tm.getInstance(asset.root)
-        val finalTransform = multiplyColumnMajor(cameraController.modelTransform(), base)
-        tm.setTransform(instance, finalTransform)
-    }
-
-    private fun multiplyColumnMajor(a: FloatArray, b: FloatArray): FloatArray {
-        val out = FloatArray(16)
-        for (col in 0..3) {
-            for (row in 0..3) {
-                out[col * 4 + row] =
-                    a[0 * 4 + row] * b[col * 4 + 0] +
-                    a[1 * 4 + row] * b[col * 4 + 1] +
-                    a[2 * 4 + row] * b[col * 4 + 2] +
-                    a[3 * 4 + row] * b[col * 4 + 3]
-            }
-        }
-        return out
     }
 
     private fun copyUriToCache(uri: Uri, fileName: String): File {
