@@ -27,7 +27,7 @@ class AxisGizmoView(context: Context) : View(context) {
         typeface = android.graphics.Typeface.DEFAULT_BOLD
     }
     private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.argb(115, 0, 0, 0)
+        color = Color.argb(145, 8, 15, 25)
         style = Paint.Style.FILL
     }
 

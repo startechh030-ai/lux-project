@@ -9,6 +9,7 @@ import android.provider.OpenableColumns
 import android.view.Choreographer
 import android.view.Gravity
 import android.view.SurfaceView
+import android.view.View
 import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.TextView
@@ -34,6 +35,7 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
     private lateinit var axisGizmoView: AxisGizmoView
     private lateinit var gestureHandler: NativeCameraGestureHandler
     private var lastFrameTimeNanos: Long = 0L
+    private var baseModelTransform: FloatArray? = null
 
     private val pickGlb = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
@@ -55,9 +57,6 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
         root.setBackgroundColor(Color.rgb(16, 18, 22))
 
         surfaceView = SurfaceView(this)
-        surfaceView.setOnTouchListener { _, event ->
-            gestureHandler.onTouchEvent(event)
-        }
         root.addView(surfaceView, FrameLayout.LayoutParams(-1, -1))
 
         val chromeView = EditorChromeView(this).apply {
@@ -66,10 +65,21 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
         }
         root.addView(chromeView, FrameLayout.LayoutParams(-1, -1))
 
+        // Dedicated transparent gesture layer. This is more reliable than attaching
+        // touch directly to SurfaceView when Android overlays are above it.
+        val gestureLayer = View(this).apply {
+            setBackgroundColor(Color.TRANSPARENT)
+            setOnTouchListener { _, event ->
+                gestureHandler.onTouchEvent(event)
+                true
+            }
+        }
+        root.addView(gestureLayer, FrameLayout.LayoutParams(-1, -1))
+
         val pickButton = ImageButton(this).apply {
             setImageResource(android.R.drawable.ic_menu_upload)
             setColorFilter(Color.WHITE)
-            setBackgroundColor(Color.argb(220, 124, 92, 255))
+            setBackgroundColor(Color.argb(230, 56, 189, 248))
             contentDescription = "Pick GLB file"
             setPadding(22, 22, 22, 22)
             setOnClickListener { openFilePicker() }
@@ -143,23 +153,40 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
             val aspect = surfaceView.width.toDouble() / surfaceView.height.toDouble()
             NativeCamera.setScreenSize(surfaceView.width, surfaceView.height)
             NativeCamera.update(delta)
-            applyNativeCamera(aspect)
+            val cameraState = NativeCamera.getCameraState()
+            applyStableCamera(aspect)
+            applyNativeModelTransform(cameraState)
+            updateGizmo(cameraState)
             modelViewer.render(frameTimeNanos)
         }
         Choreographer.getInstance().postFrameCallback(this)
     }
 
-    private fun applyNativeCamera(aspect: Double) {
-        val c = NativeCamera.getCameraState()
+    private fun applyStableCamera(aspect: Double) {
+        // ModelViewer may control its internal camera during render(), so for now
+        // we keep camera stable and apply native orbit/zoom/pan to the model root.
         modelViewer.camera.setProjection(45.0, aspect, 0.05, 1000.0, com.google.android.filament.Camera.Fov.VERTICAL)
         modelViewer.camera.lookAt(
-            c[0].toDouble(), c[1].toDouble(), c[2].toDouble(),
-            c[3].toDouble(), c[4].toDouble(), c[5].toDouble(),
-            c[6].toDouble(), c[7].toDouble(), c[8].toDouble()
+            0.0, 0.0, 3.0,
+            0.0, 0.0, 0.0,
+            0.0, 1.0, 0.0
         )
+    }
+
+    private fun applyNativeModelTransform(cameraState: FloatArray) {
+        val asset = modelViewer.asset ?: return
+        val base = baseModelTransform ?: return
+        val tm = engine.transformManager
+        val instance = tm.getInstance(asset.root)
+        val gestureTransform = NativeModelTransform.fromCameraState(cameraState)
+        val finalTransform = NativeModelTransform.multiplyColumnMajor(gestureTransform, base)
+        tm.setTransform(instance, finalTransform)
+    }
+
+    private fun updateGizmo(cameraState: FloatArray) {
         if (::axisGizmoView.isInitialized) {
-            axisGizmoView.yaw = c[9]
-            axisGizmoView.pitch = c[10]
+            axisGizmoView.yaw = cameraState[9]
+            axisGizmoView.pitch = cameraState[10]
         }
     }
 
@@ -189,6 +216,7 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
             modelViewer.destroyModel()
             modelViewer.loadModelGlb(buffer)
             modelViewer.transformToUnitCube()
+            captureBaseModelTransform()
             NativeCamera.reset(0f, 0f, 0f, 1f)
             lastFrameTimeNanos = 0L
 
@@ -196,6 +224,18 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
         }.onFailure { error ->
             statusText.text = "Failed to load GLB"
             Toast.makeText(this, error.message ?: "Unknown error", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun captureBaseModelTransform() {
+        val asset = modelViewer.asset ?: run {
+            baseModelTransform = null
+            return
+        }
+        val tm = engine.transformManager
+        val instance = tm.getInstance(asset.root)
+        baseModelTransform = FloatArray(16).also { base ->
+            tm.getTransform(instance, base)
         }
     }
 

@@ -9,7 +9,7 @@ import android.view.View
 
 class EditorChromeView(context: Context) : View(context) {
     private val panelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.argb(215, 28, 28, 32)
+        color = Color.argb(218, 18, 25, 34)
         style = Paint.Style.FILL
     }
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -18,7 +18,7 @@ class EditorChromeView(context: Context) : View(context) {
         textSize = 20f
     }
     private val accentPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.rgb(124, 92, 255)
+        color = Color.rgb(56, 189, 248)
         style = Paint.Style.FILL
     }
 

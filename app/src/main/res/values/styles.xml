@@ -4,6 +4,6 @@
         <item name="android:statusBarColor">#101216</item>
         <item name="android:navigationBarColor">#101216</item>
         <item name="android:fontFamily">sans</item>
-        <item name="android:colorAccent">#7C5CFF</item>
+        <item name="android:colorAccent">#38BDF8</item>
     </style>
 </resources>
