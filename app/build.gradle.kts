@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.arena.simpleglbviewer"
+    namespace = "luxe.texture3d.app"
     compileSdk = 35
     ndkVersion = "27.0.12077973"
 
@@ -18,7 +18,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.arena.simpleglbviewer"
+        applicationId = "luxe.texture3d.app"
         minSdk = 26
         targetSdk = 35
         versionCode = 1

@@ -1,0 +1,112 @@
+package luxe.texture3d.app...// upadte
+
+import android.content.Context
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.RectF
+import android.util.AttributeSet
+import android.view.View
+import kotlin.math.cos
+import kotlin.math.sin
+
+/**
+ * Axis Gizmo / Orientation Cube
+ * Syncs with camera orientation to show current view direction
+ * Similar to Nomad Sculpt's top-right gizmo
+ */
+class AxisGizmo @JvmOverloads constructor(
+    context: Context,
+    attrs: AttributeSet? = null,
+    defStyleAttr: Int = 0
+) : View(context, attrs, defStyleAttr) {
+
+    private val paintX = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#FF4444") }
+    private val paintY = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#44FF44") }
+    private val paintZ = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#4444FF") }
+    private val paintText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        textSize = 24f
+        textAlign = Paint.Align.CENTER
+    }
+    private val paintBg = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#88000000")
+    }
+
+    // Camera orientation (set from Camera.kt each frame)
+    private var camYaw = 0f
+    private var camPitch = 0f
+
+    private val size = 120f
+    private val axisLength = 40f
+
+    fun setCameraOrientation(yaw: Float, pitch: Float) {
+        camYaw = yaw
+        camPitch = pitch
+        invalidate()
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+
+        val cx = width / 2f
+        val cy = height / 2f
+
+        // Background circle
+        canvas.drawCircle(cx, cy, size / 2f, paintBg)
+
+        // Project axes based on camera rotation
+        // Simple orthographic projection of unit axes rotated by camera angles
+        val cosY = cos(camYaw)
+        val sinY = sin(camYaw)
+        val cosP = cos(camPitch)
+        val sinP = sin(camPitch)
+
+        // X axis (red) - points right in world space
+        val xDir = projectAxis(1f, 0f, 0f, cosY, sinY, cosP, sinP)
+        drawAxis(canvas, cx, cy, xDir, paintX, "X")
+
+        // Y axis (green) - points up in world space
+        val yDir = projectAxis(0f, 1f, 0f, cosY, sinY, cosP, sinP)
+        drawAxis(canvas, cx, cy, yDir, paintY, "Y")
+
+        // Z axis (blue) - points forward in world space
+        val zDir = projectAxis(0f, 0f, 1f, cosY, sinY, cosP, sinP)
+        drawAxis(canvas, cx, cy, zDir, paintZ, "Z")
+    }
+
+    private fun projectAxis(
+        ax: Float, ay: Float, az: Float,
+        cosY: Float, sinY: Float, cosP: Float, sinP: Float
+    ): Pair<Float, Float> {
+        // Rotate by yaw (around Y)
+        val rx = ax * cosY + az * sinY
+        val ry = ay
+        val rz = -ax * sinY + az * cosY
+
+        // Rotate by pitch (around X)
+        val px = rx
+        val py = ry * cosP - rz * sinP
+        val pz = ry * sinP + rz * cosP
+
+        // Simple orthographic projection (ignore Z depth for gizmo)
+        // Scale for visibility
+        return Pair(px * axisLength, -py * axisLength) // flip Y for screen coords
+    }
+
+    private fun drawAxis(canvas: Canvas, cx: Float, cy: Float, dir: Pair<Float, Float>, paint: Paint, label: String) {
+        val endX = cx + dir.first
+        val endY = cy + dir.second
+
+        canvas.drawLine(cx, cy, endX, endY, paint.apply { strokeWidth = 4f })
+
+        // Label at end
+        val textOffset = 12f
+        canvas.drawText(label, endX, endY + textOffset, paintText)
+    }
+
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        val sz = (size * 1.5f).toInt()
+        setMeasuredDimension(sz, sz)
+    }
+}

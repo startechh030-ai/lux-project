@@ -1,0 +1,317 @@
+﻿2026-07-10T13:48:23.2585603Z ##[group]Run gradle assembleDebug
+2026-07-10T13:48:23.2585991Z [36;1mgradle assembleDebug[0m
+2026-07-10T13:48:23.2620386Z shell: /usr/bin/bash -e {0}
+2026-07-10T13:48:23.2620688Z env:
+2026-07-10T13:48:23.2621044Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.19-10/x64
+2026-07-10T13:48:23.2621593Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.19-10/x64
+2026-07-10T13:48:23.2622035Z   ANDROID_HOME: /usr/local/lib/android/sdk
+2026-07-10T13:48:23.2622373Z   ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+2026-07-10T13:48:23.2622982Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-07-10T13:48:23.2623344Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-07-10T13:48:23.2623681Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-07-10T13:48:23.2624015Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-07-10T13:48:23.2624495Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-07-10T13:48:23.2625029Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-07-10T13:48:23.2625597Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-07-10T13:48:23.2625905Z ##[endgroup]
+2026-07-10T13:48:23.9224007Z Starting a Gradle Daemon (subsequent builds will be faster)
+2026-07-10T13:48:33.7234811Z > Task :app:preBuild UP-TO-DATE
+2026-07-10T13:48:33.7261073Z > Task :app:preDebugBuild UP-TO-DATE
+2026-07-10T13:48:33.7284193Z > Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+2026-07-10T13:48:33.7300696Z > Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+2026-07-10T13:48:34.0233798Z > Task :app:generateDebugResValues
+2026-07-10T13:48:34.0250182Z > Task :app:checkDebugAarMetadata
+2026-07-10T13:48:34.0263503Z > Task :app:mapDebugSourceSetPaths
+2026-07-10T13:48:34.0264196Z > Task :app:generateDebugResources
+2026-07-10T13:48:34.7212331Z > Task :app:packageDebugResources
+2026-07-10T13:48:35.1196516Z > Task :app:mergeDebugResources
+2026-07-10T13:48:36.0204049Z > Task :app:createDebugCompatibleScreenManifests
+2026-07-10T13:48:36.0204956Z > Task :app:extractDeepLinksDebug
+2026-07-10T13:48:36.1213831Z > Task :app:parseDebugLocalResources
+2026-07-10T13:48:36.2200356Z > Task :app:processDebugMainManifest
+2026-07-10T13:48:36.3213876Z > Task :app:processDebugManifest
+2026-07-10T13:48:36.3230795Z > Task :app:javaPreCompileDebug
+2026-07-10T13:48:36.3231603Z > Task :app:processDebugManifestForPackage
+2026-07-10T13:48:36.4219991Z > Task :app:mergeDebugShaders
+2026-07-10T13:48:36.4254618Z > Task :app:compileDebugShaders NO-SOURCE
+2026-07-10T13:48:36.4272890Z > Task :app:generateDebugAssets UP-TO-DATE
+2026-07-10T13:48:36.5225075Z > Task :app:mergeDebugAssets
+2026-07-10T13:48:36.6230355Z > Task :app:desugarDebugFileDependencies
+2026-07-10T13:48:36.6238092Z > Task :app:compressDebugAssets
+2026-07-10T13:48:36.6293255Z > Task :app:checkDebugDuplicateClasses
+2026-07-10T13:48:36.7206280Z > Task :app:processDebugResources
+2026-07-10T13:48:37.2215294Z > Task :app:configureCMakeDebug[arm64-v8a]
+2026-07-10T13:48:37.8196988Z > Task :app:mergeLibDexDebug
+2026-07-10T13:48:38.0223008Z 
+2026-07-10T13:48:38.0253584Z > Task :app:buildCMakeDebug[arm64-v8a] FAILED
+2026-07-10T13:48:38.0298547Z C/C++: ninja: Entering directory `/home/runner/work/lux-project/lux-project/app/.cxx/Debug/1e1b5z4z/arm64-v8a'
+2026-07-10T13:48:38.0358880Z C/C++: /usr/local/lib/android/sdk/ndk/27.0.12077973/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-none-linux-android26 --sysroot=/usr/local/lib/android/sdk/ndk/27.0.12077973/toolchains/llvm/prebuilt/linux-x86_64/sysroot -Dsimple_camera_native_EXPORTS  -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security  -std=c++17 -O2 -fno-limit-debug-info  -fPIC -MD -MT CMakeFiles/simple-camera-native.dir/NativeCamera.cpp.o -MF CMakeFiles/simple-camera-native.dir/NativeCamera.cpp.o.d -o CMakeFiles/simple-camera-native.dir/NativeCamera.cpp.o -c /home/runner/work/lux-project/lux-project/app/src/main/cpp/NativeCamera.cpp
+2026-07-10T13:48:38.0365137Z C/C++: /home/runner/work/lux-project/lux-project/app/src/main/cpp/NativeCamera.cpp:292:9: error: use of undeclared identifier 'nativeResetToDefault'
+2026-07-10T13:48:38.0424760Z C/C++:   292 |         nativeResetToDefault(nullptr, nullptr);
+2026-07-10T13:48:38.0456106Z C/C++:       |         ^
+2026-07-10T13:48:38.0483187Z C/C++: 1 error generated.
+2026-07-10T13:48:42.4195614Z 
+2026-07-10T13:48:42.4201654Z > Task :app:mergeExtDexDebug
+2026-07-10T13:48:45.7197521Z 
+2026-07-10T13:48:45.7227213Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/AxisGizmoView.kt:66:9 Unresolved reference 'cy'.
+2026-07-10T13:48:45.7228688Z > Task :app:compileDebugKotlin FAILED
+2026-07-10T13:48:45.7254472Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/AxisGizmoView.kt:67:30 Unresolved reference 'cy'.
+2026-07-10T13:48:45.7288520Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/AxisGizmoView.kt:70:31 Unresolved reference 'cy'.
+2026-07-10T13:48:45.7306129Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/AxisGizmoView.kt:71:31 Unresolved reference 'cy'.
+2026-07-10T13:48:45.7354451Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/AxisGizmoView.kt:81:48 Unresolved reference 'cy'.
+2026-07-10T13:48:45.7384230Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/AxisGizmoView.kt:82:29 Unresolved reference 'cy'.
+2026-07-10T13:48:45.7394197Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/AxisGizmoView.kt:86:48 Unresolved reference 'cy'.
+2026-07-10T13:48:45.7429181Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/AxisGizmoView.kt:87:29 Unresolved reference 'cy'.
+2026-07-10T13:48:45.7454257Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/AxisGizmoView.kt:91:48 Unresolved reference 'cy'.
+2026-07-10T13:48:45.7483721Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/AxisGizmoView.kt:92:29 Unresolved reference 'cy'.
+2026-07-10T13:48:45.7486230Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:11:17 Unresolved reference 'appcompat'.
+2026-07-10T13:48:45.7527894Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:17:27 Unresolved reference 'material'.
+2026-07-10T13:48:45.7532117Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:24:22 Unresolved reference 'AppCompatActivity'.
+2026-07-10T13:48:45.7535305Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:35:27 Unresolved reference 'UiHelper'.
+2026-07-10T13:48:45.7538270Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:35:38 Unresolved reference 'UiHelper'.
+2026-07-10T13:48:45.7541048Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:35:47 Unresolved reference 'UiHelper'.
+2026-07-10T13:48:45.7543779Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:38:35 Unresolved reference 'MaterialButton'.
+2026-07-10T13:48:45.7546364Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:49:36 Unresolved reference 'MaterialButton'.
+2026-07-10T13:48:45.7549016Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:50:41 Unresolved reference 'MaterialButton'.
+2026-07-10T13:48:45.7551985Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:51:46 Unresolved reference 'MaterialButton'.
+2026-07-10T13:48:45.7555152Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:52:44 Unresolved reference 'MaterialButton'.
+2026-07-10T13:48:45.7558266Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:53:47 Unresolved reference 'MaterialButton'.
+2026-07-10T13:48:45.7575301Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:78:30 Unresolved reference 'registerForActivityResult'.
+2026-07-10T13:48:45.7599481Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:78:96 Cannot infer type for this parameter. Please specify it explicitly.
+2026-07-10T13:48:45.7602775Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:79:14 Cannot infer type for this parameter. Please specify it explicitly.
+2026-07-10T13:48:45.7606692Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:79:14 Unresolved reference. None of the following candidates is applicable because of a receiver type mismatch:
+2026-07-10T13:48:45.7612153Z fun <T, R> T.let(block: (T) -> R): R
+2026-07-10T13:48:45.7613531Z     [R|Contract description]
+2026-07-10T13:48:45.7614022Z      <
+2026-07-10T13:48:45.7614522Z         CallsInPlace(block, EXACTLY_ONCE)
+2026-07-10T13:48:45.7615040Z     >
+2026-07-10T13:48:45.7616799Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:79:18 Cannot infer type for this parameter. Please specify it explicitly.
+2026-07-10T13:48:45.7619305Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:82:5 'onCreate' overrides nothing.
+2026-07-10T13:48:45.7621698Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:83:9 Unresolved reference 'AppCompatActivity'.
+2026-07-10T13:48:45.7624307Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:83:15 Unresolved reference 'onCreate'.
+2026-07-10T13:48:45.7626603Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:84:48 Unresolved reference 'window'.
+2026-07-10T13:48:45.7628955Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:85:9 Unresolved reference 'setContentView'.
+2026-07-10T13:48:45.7631279Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:85:26 Unresolved reference 'layout'.
+2026-07-10T13:48:45.7633776Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:101:23 Unresolved reference 'findViewById'.
+2026-07-10T13:48:45.7636106Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:101:38 Unresolved reference 'id'.
+2026-07-10T13:48:45.7638518Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:102:19 Unresolved reference 'findViewById'.
+2026-07-10T13:48:45.7640902Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:102:34 Unresolved reference 'id'.
+2026-07-10T13:48:45.7658313Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:103:23 Unresolved reference 'findViewById'.
+2026-07-10T13:48:45.7660659Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:103:38 Unresolved reference 'id'.
+2026-07-10T13:48:45.7663237Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:104:22 Unresolved reference 'findViewById'.
+2026-07-10T13:48:45.7665879Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:104:37 Unresolved reference 'id'.
+2026-07-10T13:48:45.7668277Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:105:25 Unresolved reference 'findViewById'.
+2026-07-10T13:48:45.7670603Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:105:40 Unresolved reference 'id'.
+2026-07-10T13:48:45.7673141Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:106:22 Unresolved reference 'findViewById'.
+2026-07-10T13:48:45.7675441Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:106:37 Unresolved reference 'id'.
+2026-07-10T13:48:45.7677898Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:107:27 Unresolved reference 'findViewById'.
+2026-07-10T13:48:45.7680526Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:107:42 Unresolved reference 'id'.
+2026-07-10T13:48:45.7683286Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:108:22 Unresolved reference 'findViewById'.
+2026-07-10T13:48:45.7685709Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:108:37 Unresolved reference 'id'.
+2026-07-10T13:48:45.7688132Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:109:23 Unresolved reference 'findViewById'.
+2026-07-10T13:48:45.7690502Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:109:38 Unresolved reference 'id'.
+2026-07-10T13:48:45.7693212Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:110:23 Unresolved reference 'findViewById'.
+2026-07-10T13:48:45.7695782Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:110:38 Unresolved reference 'id'.
+2026-07-10T13:48:45.7698230Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:111:24 Unresolved reference 'findViewById'.
+2026-07-10T13:48:45.7700664Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:111:39 Unresolved reference 'id'.
+2026-07-10T13:48:45.7703417Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:112:24 Unresolved reference 'findViewById'.
+2026-07-10T13:48:45.7705769Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:112:39 Unresolved reference 'id'.
+2026-07-10T13:48:45.7708125Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:113:20 Unresolved reference 'findViewById'.
+2026-07-10T13:48:45.7710495Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:113:35 Unresolved reference 'id'.
+2026-07-10T13:48:45.7713050Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:114:25 Unresolved reference 'findViewById'.
+2026-07-10T13:48:45.7715413Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:114:40 Unresolved reference 'id'.
+2026-07-10T13:48:45.7717796Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:115:30 Unresolved reference 'findViewById'.
+2026-07-10T13:48:45.7720312Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:115:45 Unresolved reference 'id'.
+2026-07-10T13:48:45.7723312Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:116:28 Unresolved reference 'findViewById'.
+2026-07-10T13:48:45.7725577Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:116:43 Unresolved reference 'id'.
+2026-07-10T13:48:45.7727994Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:117:31 Unresolved reference 'findViewById'.
+2026-07-10T13:48:45.7730516Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:117:46 Unresolved reference 'id'.
+2026-07-10T13:48:45.7733189Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:118:25 Unresolved reference 'findViewById'.
+2026-07-10T13:48:45.7735637Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:118:40 Unresolved reference 'id'.
+2026-07-10T13:48:45.7738352Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:119:24 Unresolved reference 'findViewById'.
+2026-07-10T13:48:45.7740774Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:119:39 Unresolved reference 'id'.
+2026-07-10T13:48:45.7746102Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:131:53 Argument type mismatch: actual type is 'com.arena.simpleglbviewer.MainActivity', but 'android.content.Context' was expected.
+2026-07-10T13:48:45.7749285Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:135:17 Unresolved reference 'setOnClickListener'.
+2026-07-10T13:48:45.7751749Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:136:18 Unresolved reference 'setOnClickListener'.
+2026-07-10T13:48:45.7754465Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:140:23 Unresolved reference 'setOnClickListener'.
+2026-07-10T13:48:45.7757048Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:144:28 Unresolved reference 'setOnClickListener'.
+2026-07-10T13:48:45.7759732Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:146:59 None of the following candidates is applicable:
+2026-07-10T13:48:45.7761644Z class View : Any, Drawable.Callback, KeyEvent.Callback, AccessibilityEventSource
+2026-07-10T13:48:45.7762760Z class View : Any
+2026-07-10T13:48:45.7764421Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:146:64 Unresolved reference 'BlendMode'.
+2026-07-10T13:48:45.7767154Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:146:91 None of the following candidates is applicable:
+2026-07-10T13:48:45.7769038Z class View : Any, Drawable.Callback, KeyEvent.Callback, AccessibilityEventSource
+2026-07-10T13:48:45.7769940Z class View : Any
+2026-07-10T13:48:45.7771588Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:146:96 Unresolved reference 'BlendMode'.
+2026-07-10T13:48:45.7774397Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:149:26 Unresolved reference 'setOnClickListener'.
+2026-07-10T13:48:45.7777091Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:154:29 Unresolved reference 'setOnClickListener'.
+2026-07-10T13:48:45.7779702Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:162:22 Unresolved reference 'setOnActionListener'.
+2026-07-10T13:48:45.7783043Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:162:44 Cannot infer type for this parameter. Please specify it explicitly.
+2026-07-10T13:48:45.7785496Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:164:34 Unresolved reference 'Action'.
+2026-07-10T13:48:45.7787653Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:165:34 Unresolved reference 'Action'.
+2026-07-10T13:48:45.7789803Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:169:34 Unresolved reference 'Action'.
+2026-07-10T13:48:45.7791970Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:173:34 Unresolved reference 'Action'.
+2026-07-10T13:48:45.7794546Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:175:67 None of the following candidates is applicable:
+2026-07-10T13:48:45.7796408Z class View : Any, Drawable.Callback, KeyEvent.Callback, AccessibilityEventSource
+2026-07-10T13:48:45.7797162Z class View : Any
+2026-07-10T13:48:45.7798599Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:175:72 Unresolved reference 'BlendMode'.
+2026-07-10T13:48:45.7800863Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:175:99 None of the following candidates is applicable:
+2026-07-10T13:48:45.7802677Z class View : Any, Drawable.Callback, KeyEvent.Callback, AccessibilityEventSource
+2026-07-10T13:48:45.7803521Z class View : Any
+2026-07-10T13:48:45.7805197Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:175:104 Unresolved reference 'BlendMode'.
+2026-07-10T13:48:45.7807786Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:178:34 Unresolved reference 'Action'.
+2026-07-10T13:48:45.7810351Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:183:34 Unresolved reference 'Action'.
+2026-07-10T13:48:45.7813160Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:212:38 Unresolved reference 'window'.
+2026-07-10T13:48:45.7815661Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:212:46 Unresolved reference 'window'.
+2026-07-10T13:48:45.7818120Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:227:23 Unresolved reference 'text'.
+2026-07-10T13:48:45.7820496Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:228:28 Unresolved reference 'text'.
+2026-07-10T13:48:45.7823183Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:229:26 Unresolved reference 'text'.
+2026-07-10T13:48:45.7825645Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:230:29 Unresolved reference 'text'.
+2026-07-10T13:48:45.7828318Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:236:34 None of the following candidates is applicable:
+2026-07-10T13:48:45.7830183Z class View : Any, Drawable.Callback, KeyEvent.Callback, AccessibilityEventSource
+2026-07-10T13:48:45.7831084Z class View : Any
+2026-07-10T13:48:45.7833026Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:236:39 Unresolved reference 'VISIBLE'.
+2026-07-10T13:48:45.7835555Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:254:40 Unresolved reference 'min'.
+2026-07-10T13:48:45.7838230Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:255:40 Unresolved reference 'max'.
+2026-07-10T13:48:45.7840778Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:256:52 None of the following candidates is applicable:
+2026-07-10T13:48:45.7842216Z fun Float.times(q: Quaternion): Quaternion
+2026-07-10T13:48:45.7843173Z fun Float.times(v: Float2): Float2
+2026-07-10T13:48:45.7843779Z fun Float.times(v: Float3): Float3
+2026-07-10T13:48:45.7844398Z fun Float.times(v: Float4): Float4
+2026-07-10T13:48:45.7844953Z fun Half.times(v: Half3): Half3
+2026-07-10T13:48:45.7845500Z fun Half.times(v: Half4): Half4
+2026-07-10T13:48:45.7847317Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:257:52 None of the following candidates is applicable:
+2026-07-10T13:48:45.7849085Z fun Float.times(q: Quaternion): Quaternion
+2026-07-10T13:48:45.7849781Z fun Float.times(v: Float2): Float2
+2026-07-10T13:48:45.7850398Z fun Float.times(v: Float3): Float3
+2026-07-10T13:48:45.7851038Z fun Float.times(v: Float4): Float4
+2026-07-10T13:48:45.7851682Z fun Half.times(v: Half3): Half3
+2026-07-10T13:48:45.7852289Z fun Half.times(v: Half4): Half4
+2026-07-10T13:48:45.7854350Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:258:52 None of the following candidates is applicable:
+2026-07-10T13:48:45.7855929Z fun Float.times(q: Quaternion): Quaternion
+2026-07-10T13:48:45.7856637Z fun Float.times(v: Float2): Float2
+2026-07-10T13:48:45.7857284Z fun Float.times(v: Float3): Float3
+2026-07-10T13:48:45.7857929Z fun Float.times(v: Float4): Float4
+2026-07-10T13:48:45.7858565Z fun Half.times(v: Half3): Half3
+2026-07-10T13:48:45.7859201Z fun Half.times(v: Half4): Half4
+2026-07-10T13:48:45.7861022Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:262:66 None of the following candidates is applicable:
+2026-07-10T13:48:45.7862798Z fun Float.times(q: Quaternion): Quaternion
+2026-07-10T13:48:45.7863462Z fun Float.times(v: Float2): Float2
+2026-07-10T13:48:45.7864034Z fun Float.times(v: Float3): Float3
+2026-07-10T13:48:45.7864604Z fun Float.times(v: Float4): Float4
+2026-07-10T13:48:45.7865163Z fun Half.times(v: Half3): Half3
+2026-07-10T13:48:45.7865702Z fun Half.times(v: Half4): Half4
+2026-07-10T13:48:45.7867308Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:270:46 None of the following candidates is applicable:
+2026-07-10T13:48:45.7868923Z class View : Any, Drawable.Callback, KeyEvent.Callback, AccessibilityEventSource
+2026-07-10T13:48:45.7869672Z class View : Any
+2026-07-10T13:48:45.7871074Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:270:51 Unresolved reference 'GONE'.
+2026-07-10T13:48:45.7873577Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:276:46 None of the following candidates is applicable:
+2026-07-10T13:48:45.7875214Z class View : Any, Drawable.Callback, KeyEvent.Callback, AccessibilityEventSource
+2026-07-10T13:48:45.7875960Z class View : Any
+2026-07-10T13:48:45.7877359Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:276:51 Unresolved reference 'GONE'.
+2026-07-10T13:48:45.7879562Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:283:9 Unresolved reference 'contentResolver'.
+2026-07-10T13:48:45.7882022Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:283:9 Argument type mismatch: actual type is 'R?', but 'K?' was expected.
+2026-07-10T13:48:45.7884817Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:283:47 Cannot infer type for this parameter. Please specify it explicitly.
+2026-07-10T13:48:45.7887661Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:283:53 Cannot infer type for this parameter. Please specify it explicitly.
+2026-07-10T13:48:45.7890147Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:284:31 Overload resolution ambiguity between candidates:
+2026-07-10T13:48:45.7891520Z fun File.readBytes(): ByteArray
+2026-07-10T13:48:45.7892109Z fun InputStream.readBytes(): ByteArray
+2026-07-10T13:48:45.7893114Z fun InputStream.readBytes(estimatedSize: Int = ...): ByteArray
+2026-07-10T13:48:45.7893919Z fun URL.readBytes(): ByteArray
+2026-07-10T13:48:45.7895654Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:285:13 'return' is prohibited here.
+2026-07-10T13:48:45.7898466Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:285:52 Overload resolution ambiguity between candidates:
+2026-07-10T13:48:45.7899927Z val Menu.size: Int
+2026-07-10T13:48:45.7900444Z val ViewGroup.size: Int
+2026-07-10T13:48:45.7902685Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:289:14 Argument type mismatch: actual type is 'kotlin.Nothing', but 'K' was expected.
+2026-07-10T13:48:45.7905338Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:290:5 Missing return statement.
+2026-07-10T13:48:45.7907874Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:294:9 Unresolved reference 'contentResolver'.
+2026-07-10T13:48:45.7910668Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:294:61 Cannot infer type for this parameter. Please specify it explicitly.
+2026-07-10T13:48:45.7913964Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:294:67 Cannot infer type for this parameter. Please specify it explicitly.
+2026-07-10T13:48:45.7916625Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:295:24 Unresolved reference 'moveToFirst'.
+2026-07-10T13:48:45.7919053Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:296:40 Unresolved reference 'getColumnIndex'.
+2026-07-10T13:48:45.7921487Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:297:53 Unresolved reference 'getString'.
+2026-07-10T13:48:45.7924153Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:303:40 Unresolved reference 'FilamentAsset'.
+2026-07-10T13:48:45.7926680Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:304:32 Unresolved reference 'renderableEntityCount'.
+2026-07-10T13:48:45.7929201Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:309:22 Unresolved reference 'renderableEntityCount'.
+2026-07-10T13:48:45.7931717Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:310:32 Unresolved reference 'getRenderableEntity'.
+2026-07-10T13:48:45.7934839Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:315:30 Unresolved reference. None of the following candidates is applicable because of a receiver type mismatch:
+2026-07-10T13:48:45.7936644Z fun ViewGroup.plusAssign(view: View): Unit
+2026-07-10T13:48:45.7938541Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:315:33 Argument type mismatch: actual type is 'R?', but 'K?' was expected.
+2026-07-10T13:48:45.7941390Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:315:41 Unresolved reference 'getIndexBuffer'.
+2026-07-10T13:48:45.7944136Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:315:67 Cannot infer type for this parameter. Please specify it explicitly.
+2026-07-10T13:48:45.7946735Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:315:73 Cannot infer type for this parameter. Please specify it explicitly.
+2026-07-10T13:48:45.7949121Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:316:28 Unresolved reference 'indexCount'.
+2026-07-10T13:48:45.7951625Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:317:26 Argument type mismatch: actual type is 'kotlin.Int', but 'K' was expected.
+2026-07-10T13:48:45.7954438Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:328:49 Unresolved reference 'animator'.
+2026-07-10T13:48:45.7956632Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:329:44 Unresolved reference 'entities'.
+2026-07-10T13:48:45.7959226Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:362:23 Argument type mismatch: actual type is 'kotlin.Float', but 'kotlin.Double' was expected.
+2026-07-10T13:48:45.7962112Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:362:30 Argument type mismatch: actual type is 'kotlin.Float', but 'kotlin.Double' was expected.
+2026-07-10T13:48:45.7965409Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:362:37 Argument type mismatch: actual type is 'kotlin.Float', but 'kotlin.Double' was expected.
+2026-07-10T13:48:45.7968342Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:362:44 Argument type mismatch: actual type is 'kotlin.Float', but 'kotlin.Double' was expected.
+2026-07-10T13:48:45.7971348Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:362:54 Argument type mismatch: actual type is 'kotlin.Float', but 'kotlin.Double' was expected.
+2026-07-10T13:48:45.7974615Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:362:64 Argument type mismatch: actual type is 'kotlin.Float', but 'kotlin.Double' was expected.
+2026-07-10T13:48:45.7977632Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:362:74 Argument type mismatch: actual type is 'kotlin.Float', but 'kotlin.Double' was expected.
+2026-07-10T13:48:45.7980652Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:362:80 Argument type mismatch: actual type is 'kotlin.Float', but 'kotlin.Double' was expected.
+2026-07-10T13:48:45.7983863Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:362:86 Argument type mismatch: actual type is 'kotlin.Float', but 'kotlin.Double' was expected.
+2026-07-10T13:48:45.7986543Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:389:22 Unresolved reference 'updateCameraInfo'.
+2026-07-10T13:48:45.7988884Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:392:5 'onResume' overrides nothing.
+2026-07-10T13:48:45.7991242Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:393:9 Unresolved reference 'AppCompatActivity'.
+2026-07-10T13:48:45.7994050Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:393:15 Unresolved reference 'onResume'.
+2026-07-10T13:48:45.7996330Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:397:5 'onPause' overrides nothing.
+2026-07-10T13:48:45.7998581Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:398:9 Unresolved reference 'AppCompatActivity'.
+2026-07-10T13:48:45.8000803Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:398:15 Unresolved reference 'onPause'.
+2026-07-10T13:48:45.8003163Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:402:5 'onDestroy' overrides nothing.
+2026-07-10T13:48:45.8005588Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:403:9 Unresolved reference 'AppCompatActivity'.
+2026-07-10T13:48:45.8007854Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/MainActivity.kt:403:15 Unresolved reference 'onDestroy'.
+2026-07-10T13:48:45.8010559Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/NativeCameraGestureHandler.kt:58:65 Too many arguments for 'fun onTouchStart(x: Float, y: Float): Unit'.
+2026-07-10T13:48:45.8013603Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/NativeCameraGestureHandler.kt:63:65 Too many arguments for 'fun onTouchStart(x: Float, y: Float): Unit'.
+2026-07-10T13:48:45.8016417Z e: file:///home/runner/work/lux-project/lux-project/app/src/main/java/com/arena/simpleglbviewer/NativeCameraGestureHandler.kt:74:65 Too many arguments for 'fun onTouchStart(x: Float, y: Float): Unit'.
+2026-07-10T13:48:45.8213049Z 
+2026-07-10T13:48:45.8214212Z gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_2-1783691307310.json
+2026-07-10T13:48:45.8215436Z FAILURE: Build completed with 2 failures.
+2026-07-10T13:48:45.8215829Z 
+2026-07-10T13:48:45.8216118Z 1: Task failed with an exception.
+2026-07-10T13:48:45.8216620Z -----------
+2026-07-10T13:48:45.8217062Z * What went wrong:
+2026-07-10T13:48:45.8217783Z Execution failed for task ':app:buildCMakeDebug[arm64-v8a]'.
+2026-07-10T13:48:45.8219531Z > com.android.ide.common.process.ProcessException: ninja: Entering directory `/home/runner/work/lux-project/lux-project/app/.cxx/Debug/1e1b5z4z/arm64-v8a'
+2026-07-10T13:48:45.8221262Z   [1/2] Building CXX object CMakeFiles/simple-camera-native.dir/NativeCamera.cpp.o
+2026-07-10T13:48:45.8222405Z   FAILED: CMakeFiles/simple-camera-native.dir/NativeCamera.cpp.o 
+2026-07-10T13:48:45.8229569Z   /usr/local/lib/android/sdk/ndk/27.0.12077973/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-none-linux-android26 --sysroot=/usr/local/lib/android/sdk/ndk/27.0.12077973/toolchains/llvm/prebuilt/linux-x86_64/sysroot -Dsimple_camera_native_EXPORTS  -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security  -std=c++17 -O2 -fno-limit-debug-info  -fPIC -MD -MT CMakeFiles/simple-camera-native.dir/NativeCamera.cpp.o -MF CMakeFiles/simple-camera-native.dir/NativeCamera.cpp.o.d -o CMakeFiles/simple-camera-native.dir/NativeCamera.cpp.o -c /home/runner/work/lux-project/lux-project/app/src/main/cpp/NativeCamera.cpp
+2026-07-10T13:48:45.8235891Z   /home/runner/work/lux-project/lux-project/app/src/main/cpp/NativeCamera.cpp:292:9: error: use of undeclared identifier 'nativeResetToDefault'
+2026-07-10T13:48:45.8237355Z     292 |         nativeResetToDefault(nullptr, nullptr);
+2026-07-10T13:48:45.8238032Z         |         ^
+2026-07-10T13:48:45.8238827Z   1 error generated.
+2026-07-10T13:48:45.8239454Z   ninja: build stopped: subcommand failed.
+2026-07-10T13:48:45.8240040Z   
+2026-07-10T13:48:45.8240637Z   C++ build system [build] failed while executing:
+2026-07-10T13:48:45.8241468Z       /usr/local/lib/android/sdk/cmake/3.22.1/bin/ninja \
+2026-07-10T13:48:45.8242094Z         -C \
+2026-07-10T13:48:45.8260239Z         /home/runner/work/lux-project/lux-project/app/.cxx/Debug/1e1b5z4z/arm64-v8a \
+2026-07-10T13:48:45.8261094Z         simple-camera-native
+2026-07-10T13:48:45.8261739Z     from /home/runner/work/lux-project/lux-project/app
+2026-07-10T13:48:45.8262153Z 
+2026-07-10T13:48:45.8262303Z * Try:
+2026-07-10T13:48:45.8263106Z > Run with --stacktrace option to get the stack trace.
+2026-07-10T13:48:45.8263898Z > Run with --info or --debug option to get more log output.
+2026-07-10T13:48:45.8264596Z > Run with --scan to get full insights.
+2026-07-10T13:48:45.8265264Z > Get more help at https://help.gradle.org.
+2026-07-10T13:48:45.8266033Z ==============================================================================
+2026-07-10T13:48:45.8266701Z 
+2026-07-10T13:48:45.8266966Z 2: Task failed with an exception.
+2026-07-10T13:48:45.8267421Z -----------
+2026-07-10T13:48:45.8267826Z * What went wrong:
+2026-07-10T13:48:45.8268429Z Execution failed for task ':app:compileDebugKotlin'.
+2026-07-10T13:48:45.8269900Z > A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
+2026-07-10T13:48:45.8271181Z    > Compilation error. See log for more details
+2026-07-10T13:48:45.8271566Z 
+2026-07-10T13:48:45.8271714Z * Try:
+2026-07-10T13:48:45.8272240Z > Run with --stacktrace option to get the stack trace.
+2026-07-10T13:48:45.8273217Z > Run with --info or --debug option to get more log output.
+2026-07-10T13:48:45.8273898Z > Run with --scan to get full insights.
+2026-07-10T13:48:45.8274528Z > Get more help at https://help.gradle.org.
+2026-07-10T13:48:45.8275241Z ==============================================================================
+2026-07-10T13:48:45.8275664Z 
+2026-07-10T13:48:45.8275874Z BUILD FAILED in 22s
+2026-07-10T13:48:45.8276385Z 24 actionable tasks: 24 executed
+2026-07-10T13:48:46.3109712Z ##[error]Process completed with exit code 1.

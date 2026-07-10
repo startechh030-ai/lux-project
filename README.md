@@ -1,4 +1,4 @@
-# SimpleGlbViewer
+# LuxeTexture3D
 
 Current milestone:
 

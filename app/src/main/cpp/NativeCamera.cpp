@@ -1,451 +1,217 @@
 #include <jni.h>
 #include <cmath>
+#include <algorithm>
 #include <android/log.h>
 
 #define LOG_TAG "NativeCamera"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 
-// Camera state
-static float targetX = 0.0f, targetY = 0.0f, targetZ = 0.0f;
-static float distance = 3.0f;
-static float yaw = 0.0f;
-static float pitch = 0.35f; // ~20 degrees down
-static float camX = 0.0f, camY = 2.0f, camZ = 3.0f;
+struct Vec3 {
+    float x, y, z;
+};
 
-// Smoothing
-static float smoothYaw = 0.0f;
-static float smoothPitch = 0.35f;
-static float smoothDistance = 3.0f;
-static float smoothTargetX = 0.0f;
-static float smoothTargetY = 0.0f;
-static float smoothTargetZ = 0.0f;
+static Vec3 add(Vec3 a, Vec3 b) { return {a.x + b.x, a.y + b.y, a.z + b.z}; }
+static Vec3 sub(Vec3 a, Vec3 b) { return {a.x - b.x, a.y - b.y, a.z - b.z}; }
+static Vec3 mul(Vec3 a, float s) { return {a.x * s, a.y * s, a.z * s}; }
+static float dot(Vec3 a, Vec3 b) { return a.x*b.x + a.y*b.y + a.z*b.z; }
+static Vec3 cross(Vec3 a, Vec3 b) {
+    return {a.y*b.z - a.z*b.y, a.z*b.x - a.x*b.z, a.x*b.y - a.y*b.x};
+}
+static Vec3 normalize(Vec3 v) {
+    float len = std::sqrt(std::max(0.0000001f, dot(v, v)));
+    return {v.x / len, v.y / len, v.z / len};
+}
+static float lerp(float a, float b, float t) { return a + (b - a) * t; }
+static Vec3 lerp(Vec3 a, Vec3 b, float t) { return {lerp(a.x,b.x,t), lerp(a.y,b.y,t), lerp(a.z,b.z,t)}; }
 
-// Inertia
-static float velocityYaw = 0.0f;
-static float velocityPitch = 0.0f;
-static bool isDragging = false;
+struct CameraState {
+    Vec3 target {0, 0, 0};
+    float yaw = 0.0f;
+    float pitch = 0.25f;
+    float distance = 3.0f;
+};
 
-// Settings
-static float sensitivity = 0.006f;
-static float damping = 0.92f; // Nomad-style heavy inertia
-static float minDistance = 0.5f;
-static float maxDistance = 50.0f;
-static float minPitch = -1.4f;
-static float maxPitch = 1.4f;
+static CameraState g_current;
+static CameraState g_target;
+static float g_minDistance = 0.45f;
+static float g_maxDistance = 80.0f;
+static float g_minPitch = -1.50f;
+static float g_maxPitch = 1.50f;
+static float g_sensitivity = 0.0065f;
+static float g_panSpeed = 0.0022f;
+static float g_smoothness = 18.0f;
+static float g_lastX = 0.0f;
+static float g_lastY = 0.0f;
+static int g_lastPointers = 0;
+static int g_screenW = 1;
+static int g_screenH = 1;
+static bool g_autoRotate = false;
+static int g_mode = 0; // 0 orbit, 1 turntable
 
-// Screen size for raycasting
-static int screenW = 1080;
-static int screenH = 1920;
-
-// Mesh bounds for raycasting
-static float meshMinX = -1, meshMinY = -1, meshMinZ = -1;
-static float meshMaxX = 1, meshMaxY = 1, meshMaxZ = 1;
-static bool hasMeshBounds = false;
-
-// Auto-rotate
-static bool autoRotate = false;
-static float autoRotateSpeed = 0.5f;
-
-// Focus animation
-static bool isFocusing = false;
-static float focusTimer = 0.0f;
-static float focusDuration = 0.6f;
-static float focusStartYaw, focusEndYaw;
-static float focusStartPitch, focusEndPitch;
-static float focusStartDist, focusEndDist;
-static float focusStartTX, focusEndTX;
-static float focusStartTY, focusEndTY;
-static float focusStartTZ, focusEndTZ;
-
-// Convert spherical to cartesian
-static void recalculateCamera() {
-    float cosP = cosf(smoothPitch);
-    float sinP = sinf(smoothPitch);
-    float cosY = cosf(smoothYaw);
-    float sinY = sinf(smoothYaw);
-
-    camX = smoothTargetX + smoothDistance * cosP * sinY;
-    camY = smoothTargetY + smoothDistance * sinP;
-    camZ = smoothTargetZ + smoothDistance * cosP * cosY;
+static Vec3 eyeFromState(const CameraState& s) {
+    float cp = std::cos(s.pitch);
+    return {
+        s.target.x + s.distance * cp * std::sin(s.yaw),
+        s.target.y + s.distance * std::sin(s.pitch),
+        s.target.z + s.distance * cp * std::cos(s.yaw)
+    };
 }
 
-static float easeOutCubic(float t) {
-    float u = 1.0f - t;
-    return 1.0f - u * u * u;
+static void resetInternal(float cx, float cy, float cz, float radius) {
+    float r = std::max(0.25f, radius);
+    g_target.target = {cx, cy, cz};
+    g_target.yaw = 0.0f;
+    g_target.pitch = 0.25f;
+    g_target.distance = std::clamp(r * 3.2f, g_minDistance, g_maxDistance);
+    g_current = g_target;
 }
 
-extern "C" {
-
-// ============================================================================
-// Lifecycle
-// ============================================================================
-JNIEXPORT void JNICALL
-Java_com_arena_simpleglbviewer_NativeCamera_nativeInit(JNIEnv*, jclass) {
-    targetX = targetY = targetZ = 0.0f;
-    distance = 3.0f;
-    yaw = 0.0f;
-    pitch = 0.35f;
-    smoothYaw = 0.0f;
-    smoothPitch = 0.35f;
-    smoothDistance = 3.0f;
-    smoothTargetX = smoothTargetY = smoothTargetZ = 0.0f;
-    velocityYaw = velocityPitch = 0.0f;
-    isDragging = false;
-    autoRotate = false;
-    isFocusing = false;
-    recalculateCamera();
-    LOGI("Camera initialized");
+extern "C" JNIEXPORT void JNICALL
+Java_luxe_texture3d_app_NativeCamera_init(JNIEnv*, jobject) {
+    resetInternal(0, 0, 0, 1);
 }
 
-JNIEXPORT void JNICALL
-Java_com_arena_simpleglbviewer_NativeCamera_nativeSetScreenSize(JNIEnv*, jclass, jint w, jint h) {
-    screenW = w;
-    screenH = h;
+extern "C" JNIEXPORT void JNICALL
+Java_luxe_texture3d_app_NativeCamera_destroy(JNIEnv*, jobject) {
 }
 
-// ============================================================================
-// Reset & Focus
-// ============================================================================
-JNIEXPORT void JNICALL
-Java_com_arena_simpleglbviewer_NativeCamera_nativeResetToDefault(JNIEnv*, jclass) {
-    targetX = targetY = targetZ = 0.0f;
-    distance = 3.0f;
-    yaw = 0.0f;
-    pitch = 0.35f;
-    smoothYaw = yaw;
-    smoothPitch = pitch;
-    smoothDistance = distance;
-    smoothTargetX = targetX;
-    smoothTargetY = targetY;
-    smoothTargetZ = targetZ;
-    velocityYaw = velocityPitch = 0.0f;
-    autoRotate = false;
-    isFocusing = false;
-    recalculateCamera();
+extern "C" JNIEXPORT void JNICALL
+Java_luxe_texture3d_app_NativeCamera_setScreenSize(JNIEnv*, jobject, jint w, jint h) {
+    g_screenW = std::max(1, (int) w);
+    g_screenH = std::max(1, (int) h);
 }
 
-JNIEXPORT void JNICALL
-Java_com_arena_simpleglbviewer_NativeCamera_nativeSetTarget(JNIEnv*, jclass,
-    jfloat x, jfloat y, jfloat z) {
-    targetX = x;
-    targetY = y;
-    targetZ = z;
-    smoothTargetX = x;
-    smoothTargetY = y;
-    smoothTargetZ = z;
+extern "C" JNIEXPORT void JNICALL
+Java_luxe_texture3d_app_NativeCamera_reset(JNIEnv*, jobject, jfloat cx, jfloat cy, jfloat cz, jfloat radius) {
+    resetInternal(cx, cy, cz, radius);
 }
 
-JNIEXPORT void JNICALL
-Java_com_arena_simpleglbviewer_NativeCamera_nativeSetDistance(JNIEnv*, jclass, jfloat dist) {
-    distance = dist;
-    smoothDistance = dist;
+extern "C" JNIEXPORT void JNICALL
+Java_luxe_texture3d_app_NativeCamera_resetToDefault(JNIEnv*, jobject) {
+    resetInternal(0, 0, 0, 1);
 }
 
-JNIEXPORT void JNICALL
-Java_com_arena_simpleglbviewer_NativeCamera_nativeFocusOn(JNIEnv*, jclass,
-    jfloat cx, jfloat cy, jfloat cz, jfloat radius) {
-    isFocusing = true;
-    focusTimer = 0.0f;
-    focusDuration = 0.6f;
-
-    focusStartYaw = yaw;
-    focusEndYaw = yaw;
-    focusStartPitch = pitch;
-    focusEndPitch = 0.35f;
-    focusStartDist = distance;
-    focusEndDist = radius * 3.0f;
-    focusStartTX = targetX;
-    focusEndTX = cx;
-    focusStartTY = targetY;
-    focusEndTY = cy;
-    focusStartTZ = targetZ;
-    focusEndTZ = cz;
+extern "C" JNIEXPORT void JNICALL
+Java_luxe_texture3d_app_NativeCamera_onTouchStart(JNIEnv*, jobject, jfloat x, jfloat y, jint pointers) {
+    g_lastX = x;
+    g_lastY = y;
+    g_lastPointers = pointers;
+    g_autoRotate = false;
 }
 
-JNIEXPORT void JNICALL
-Java_com_arena_simpleglbviewer_NativeCamera_nativeFrameModel(JNIEnv*, jclass,
-    jfloat minX, jfloat minY, jfloat minZ,
-    jfloat maxX, jfloat maxY, jfloat maxZ) {
-    float cx = (minX + maxX) * 0.5f;
-    float cy = (minY + maxY) * 0.5f;
-    float cz = (minZ + maxZ) * 0.5f;
-    float dx = maxX - minX;
-    float dy = maxY - minY;
-    float dz = maxZ - minZ;
-    float radius = sqrtf(dx*dx + dy*dy + dz*dz) * 0.5f;
-
-    targetX = cx;
-    targetY = cy;
-    targetZ = cz;
-    distance = radius * 3.5f;
-    yaw = 0.0f;
-    pitch = 0.35f;
-
-    smoothYaw = yaw;
-    smoothPitch = pitch;
-    smoothDistance = distance;
-    smoothTargetX = targetX;
-    smoothTargetY = targetY;
-    smoothTargetZ = targetZ;
-    velocityYaw = velocityPitch = 0.0f;
-
-    meshMinX = minX; meshMinY = minY; meshMinZ = minZ;
-    meshMaxX = maxX; meshMaxY = maxY; meshMaxZ = maxZ;
-    hasMeshBounds = true;
-
-    recalculateCamera();
-    LOGI("Framed model: center=(%.2f,%.2f,%.2f) radius=%.2f", cx, cy, cz, radius);
-}
-
-// ============================================================================
-// Touch Input
-// ============================================================================
-JNIEXPORT void JNICALL
-Java_com_arena_simpleglbviewer_NativeCamera_nativeOnTouchStart(JNIEnv*, jclass, jfloat x, jfloat y) {
-    isDragging = true;
-    velocityYaw = 0.0f;
-    velocityPitch = 0.0f;
-    autoRotate = false; // Stop auto-rotate on touch
-}
-
-JNIEXPORT void JNICALL
-Java_com_arena_simpleglbviewer_NativeCamera_nativeOnTouchMove(JNIEnv*, jclass,
-    jfloat dx, jfloat dy, jint pointerCount) {
-    if (pointerCount == 1) {
-        // ORBIT: rotate camera around target
-        yaw -= dx * sensitivity;
-        pitch += dy * sensitivity;
-
-        // Clamp pitch
-        if (pitch < minPitch) pitch = minPitch;
-        if (pitch > maxPitch) pitch = maxPitch;
-
-        // Store velocity for inertia
-        velocityYaw = -dx * sensitivity * 60.0f;
-        velocityPitch = dy * sensitivity * 60.0f;
-
-    } else if (pointerCount >= 2) {
-        // PAN: move target and camera together
-        // Calculate camera right and up vectors
-        float cosP = cosf(pitch);
-        float sinP = sinf(pitch);
-        float cosY = cosf(yaw);
-        float sinY = sinf(yaw);
-
-        // Forward vector (from target to camera)
-        float fwdX = cosP * sinY;
-        float fwdY = sinP;
-        float fwdZ = cosP * cosY;
-
-        // Right vector = cross(up, forward)
-        float rightX = fwdZ; // cross((0,1,0), fwd) = (fwdZ, 0, -fwdX)
-        float rightY = 0.0f;
-        float rightZ = -fwdX;
-        float rightLen = sqrtf(rightX*rightX + rightZ*rightZ);
-        if (rightLen > 0.001f) {
-            rightX /= rightLen;
-            rightZ /= rightLen;
-        }
-
-        // Up vector = cross(forward, right)
-        float upX = -fwdY * rightZ;
-        float upY = fwdX * rightZ - fwdZ * rightX;
-        float upZ = fwdY * rightX;
-        float upLen = sqrtf(upX*upX + upY*upY + upZ*upZ);
-        if (upLen > 0.001f) {
-            upX /= upLen;
-            upY /= upLen;
-            upZ /= upLen;
-        }
-
-        float panSpeed = distance * 0.002f;
-        float panX = (-dx * rightX + dy * upX) * panSpeed;
-        float panY = (-dx * rightY + dy * upY) * panSpeed;
-        float panZ = (-dx * rightZ + dy * upZ) * panSpeed;
-
-        targetX += panX;
-        targetY += panY;
-        targetZ += panZ;
-
-        velocityYaw = 0.0f;
-        velocityPitch = 0.0f;
-    }
-}
-
-JNIEXPORT void JNICALL
-Java_com_arena_simpleglbviewer_NativeCamera_nativeOnTouchEnd(JNIEnv*, jclass) {
-    isDragging = false;
-}
-
-JNIEXPORT void JNICALL
-Java_com_arena_simpleglbviewer_NativeCamera_nativeOnPinch(JNIEnv*, jclass, jfloat scale) {
-    distance /= scale;
-    if (distance < minDistance) distance = minDistance;
-    if (distance > maxDistance) distance = maxDistance;
-}
-
-JNIEXPORT void JNICALL
-Java_com_arena_simpleglbviewer_NativeCamera_nativeOnDoubleTap(JNIEnv*, jclass, jfloat x, jfloat y) {
-    // Simple raycast against AABB to set pivot
-    if (!hasMeshBounds) {
-        // No mesh data, just reset
-        nativeResetToDefault(nullptr, nullptr);
+extern "C" JNIEXPORT void JNICALL
+Java_luxe_texture3d_app_NativeCamera_onTouchMove(JNIEnv*, jobject, jfloat x, jfloat y, jint pointers) {
+    if (g_lastPointers != pointers) {
+        g_lastX = x;
+        g_lastY = y;
+        g_lastPointers = pointers;
         return;
     }
 
-    // For now, set pivot to center of mesh at tap depth
-    // Full triangle raycast would need mesh vertex data
-    float ndcX = (2.0f * x / screenW) - 1.0f;
-    float ndcY = 1.0f - (2.0f * y / screenH);
+    float dx = x - g_lastX;
+    float dy = y - g_lastY;
+    g_lastX = x;
+    g_lastY = y;
 
-    // Approximate: project ray to mesh bounds center plane
-    float meshCX = (meshMinX + meshMaxX) * 0.5f;
-    float meshCY = (meshMinY + meshMaxY) * 0.5f;
-    float meshCZ = (meshMinZ + meshMaxZ) * 0.5f;
-
-    targetX = meshCX;
-    targetY = meshCY;
-    targetZ = meshCZ;
-
-    LOGI("Double tap: pivot set to (%.2f,%.2f,%.2f)", targetX, targetY, targetZ);
-}
-
-// ============================================================================
-// Update
-// ============================================================================
-JNIEXPORT void JNICALL
-Java_com_arena_simpleglbviewer_NativeCamera_nativeUpdate(JNIEnv*, jclass, jfloat deltaTime) {
-    // Handle focus animation
-    if (isFocusing) {
-        focusTimer += deltaTime;
-        float t = focusTimer / focusDuration;
-        if (t >= 1.0f) {
-            t = 1.0f;
-            isFocusing = false;
+    if (pointers <= 1) {
+        g_target.yaw -= dx * g_sensitivity;
+        if (g_mode == 0) {
+            g_target.pitch += dy * g_sensitivity;
+            g_target.pitch = std::clamp(g_target.pitch, g_minPitch, g_maxPitch);
         }
-        float eased = easeOutCubic(t);
+    } else {
+        Vec3 eye = eyeFromState(g_current);
+        Vec3 forward = normalize(sub(g_current.target, eye));
+        Vec3 worldUp {0, 1, 0};
+        Vec3 right = normalize(cross(forward, worldUp));
+        Vec3 up = normalize(cross(right, forward));
 
-        yaw = focusStartYaw + (focusEndYaw - focusStartYaw) * eased;
-        pitch = focusStartPitch + (focusEndPitch - focusStartPitch) * eased;
-        distance = focusStartDist + (focusEndDist - focusStartDist) * eased;
-        targetX = focusStartTX + (focusEndTX - focusStartTX) * eased;
-        targetY = focusStartTY + (focusEndTY - focusStartTY) * eased;
-        targetZ = focusStartTZ + (focusEndTZ - focusStartTZ) * eased;
+        float panFactor = g_current.distance * g_panSpeed;
+        Vec3 pan = add(mul(right, -dx * panFactor), mul(up, dy * panFactor));
+        g_target.target = add(g_target.target, pan);
     }
+}
 
-    // Auto-rotate
-    if (autoRotate && !isDragging && !isFocusing) {
-        yaw += autoRotateSpeed * deltaTime;
+extern "C" JNIEXPORT void JNICALL
+Java_luxe_texture3d_app_NativeCamera_onTouchEnd(JNIEnv*, jobject) {
+    g_lastPointers = 0;
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_luxe_texture3d_app_NativeCamera_onPinch(JNIEnv*, jobject, jfloat scale) {
+    if (scale <= 0.0001f) return;
+    g_target.distance = std::clamp(g_target.distance / scale, g_minDistance, g_maxDistance);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_luxe_texture3d_app_NativeCamera_update(JNIEnv*, jobject, jfloat dt) {
+    float delta = std::clamp((float) dt, 0.0f, 0.1f);
+    if (g_autoRotate) {
+        g_target.yaw += delta * 0.35f;
     }
-
-    // Inertia
-    if (!isDragging && !isFocusing) {
-        if (fabsf(velocityYaw) > 0.0001f || fabsf(velocityPitch) > 0.0001f) {
-            yaw += velocityYaw * deltaTime;
-            pitch += velocityPitch * deltaTime;
-
-            if (pitch < minPitch) pitch = minPitch;
-            if (pitch > maxPitch) pitch = maxPitch;
-
-            velocityYaw *= damping;
-            velocityPitch *= damping;
-        }
-    }
-
-    // Smooth interpolation (exponential decay toward target)
-    float t = 1.0f - powf(0.001f, deltaTime * 12.0f);
-
-    smoothYaw += (yaw - smoothYaw) * t;
-    smoothPitch += (pitch - smoothPitch) * t;
-    smoothDistance += (distance - smoothDistance) * t;
-    smoothTargetX += (targetX - smoothTargetX) * t;
-    smoothTargetY += (targetY - smoothTargetY) * t;
-    smoothTargetZ += (targetZ - smoothTargetZ) * t;
-
-    recalculateCamera();
+    float t = 1.0f - std::exp(-g_smoothness * delta);
+    g_current.target = lerp(g_current.target, g_target.target, t);
+    g_current.yaw = lerp(g_current.yaw, g_target.yaw, t);
+    g_current.pitch = lerp(g_current.pitch, g_target.pitch, t);
+    g_current.distance = lerp(g_current.distance, g_target.distance, t);
 }
 
-// ============================================================================
-// Getters
-// ============================================================================
-JNIEXPORT jfloat JNICALL
-Java_com_arena_simpleglbviewer_NativeCamera_nativeGetCamX(JNIEnv*, jclass) {
-    return camX;
+extern "C" JNIEXPORT jfloatArray JNICALL
+Java_luxe_texture3d_app_NativeCamera_getCameraState(JNIEnv* env, jobject) {
+    Vec3 eye = eyeFromState(g_current);
+    Vec3 forward = normalize(sub(g_current.target, eye));
+    Vec3 worldUp {0, 1, 0};
+    Vec3 right = normalize(cross(forward, worldUp));
+    Vec3 up = normalize(cross(right, forward));
+
+    float values[12] = {
+        eye.x, eye.y, eye.z,
+        g_current.target.x, g_current.target.y, g_current.target.z,
+        up.x, up.y, up.z,
+        g_current.yaw, g_current.pitch, g_current.distance
+    };
+    jfloatArray arr = env->NewFloatArray(12);
+    env->SetFloatArrayRegion(arr, 0, 12, values);
+    return arr;
 }
 
-JNIEXPORT jfloat JNICALL
-Java_com_arena_simpleglbviewer_NativeCamera_nativeGetCamY(JNIEnv*, jclass) {
-    return camY;
+extern "C" JNIEXPORT void JNICALL
+Java_luxe_texture3d_app_NativeCamera_setMode(JNIEnv*, jobject, jint mode) {
+    g_mode = mode;
+    if (g_mode == 1) g_target.pitch = 0.25f;
 }
 
-JNIEXPORT jfloat JNICALL
-Java_com_arena_simpleglbviewer_NativeCamera_nativeGetCamZ(JNIEnv*, jclass) {
-    return camZ;
+extern "C" JNIEXPORT void JNICALL
+Java_luxe_texture3d_app_NativeCamera_setAutoRotate(JNIEnv*, jobject, jboolean enabled) {
+    g_autoRotate = enabled;
 }
 
-JNIEXPORT jfloat JNICALL
-Java_com_arena_simpleglbviewer_NativeCamera_nativeGetTargetX(JNIEnv*, jclass) {
-    return smoothTargetX;
+extern "C" JNIEXPORT void JNICALL
+Java_luxe_texture3d_app_NativeCamera_toggleAutoRotate(JNIEnv*, jobject) {
+    g_autoRotate = !g_autoRotate;
 }
 
-JNIEXPORT jfloat JNICALL
-Java_com_arena_simpleglbviewer_NativeCamera_nativeGetTargetY(JNIEnv*, jclass) {
-    return smoothTargetY;
+extern "C" JNIEXPORT jboolean JNICALL
+Java_luxe_texture3d_app_NativeCamera_isAutoRotating(JNIEnv*, jobject) {
+    return g_autoRotate ? JNI_TRUE : JNI_FALSE;
 }
 
-JNIEXPORT jfloat JNICALL
-Java_com_arena_simpleglbviewer_NativeCamera_nativeGetTargetZ(JNIEnv*, jclass) {
-    return smoothTargetZ;
+extern "C" JNIEXPORT void JNICALL
+Java_luxe_texture3d_app_NativeCamera_setSensitivity(JNIEnv*, jobject, jfloat sensitivity) {
+    g_sensitivity = std::clamp((float) sensitivity, 0.001f, 0.05f);
 }
 
-JNIEXPORT jfloat JNICALL
-Java_com_arena_simpleglbviewer_NativeCamera_nativeGetYaw(JNIEnv*, jclass) {
-    return smoothYaw;
+extern "C" JNIEXPORT void JNICALL
+Java_luxe_texture3d_app_NativeCamera_setDamping(JNIEnv*, jobject, jfloat damping) {
+    // Public value is easier as 1..30, higher = snappier.
+    g_smoothness = std::clamp((float) damping, 1.0f, 30.0f);
 }
 
-JNIEXPORT jfloat JNICALL
-Java_com_arena_simpleglbviewer_NativeCamera_nativeGetPitch(JNIEnv*, jclass) {
-    return smoothPitch;
-}
+extern "C" JNIEXPORT jfloat JNICALL
+Java_luxe_texture3d_app_NativeCamera_getYaw(JNIEnv*, jobject) { return g_current.yaw; }
 
-JNIEXPORT jfloat JNICALL
-Java_com_arena_simpleglbviewer_NativeCamera_nativeGetDistance(JNIEnv*, jclass) {
-    return smoothDistance;
-}
+extern "C" JNIEXPORT jfloat JNICALL
+Java_luxe_texture3d_app_NativeCamera_getPitch(JNIEnv*, jobject) { return g_current.pitch; }
 
-// ============================================================================
-// Settings
-// ============================================================================
-JNIEXPORT void JNICALL
-Java_com_arena_simpleglbviewer_NativeCamera_nativeSetDamping(JNIEnv*, jclass, jfloat d) {
-    damping = d;
-}
-
-JNIEXPORT void JNICALL
-Java_com_arena_simpleglbviewer_NativeCamera_nativeSetSensitivity(JNIEnv*, jclass, jfloat s) {
-    sensitivity = s;
-}
-
-JNIEXPORT void JNICALL
-Java_com_arena_simpleglbviewer_NativeCamera_nativeSetAutoRotate(JNIEnv*, jclass, jboolean enabled) {
-    autoRotate = enabled;
-}
-
-JNIEXPORT void JNICALL
-Java_com_arena_simpleglbviewer_NativeCamera_nativeToggleAutoRotate(JNIEnv*, jclass) {
-    autoRotate = !autoRotate;
-}
-
-JNIEXPORT jboolean JNICALL
-Java_com_arena_simpleglbviewer_NativeCamera_nativeIsAutoRotating(JNIEnv*, jclass) {
-    return autoRotate ? JNI_TRUE : JNI_FALSE;
-}
-
-JNIEXPORT void JNICALL
-Java_com_arena_simpleglbviewer_NativeCamera_nativeSetDistanceRange(JNIEnv*, jclass,
-    jfloat minD, jfloat maxD) {
-    minDistance = minD;
-    maxDistance = maxD;
-}
-
-} // extern "C"
+extern "C" JNIEXPORT jfloat JNICALL
+Java_luxe_texture3d_app_NativeCamera_getDistance(JNIEnv*, jobject) { return g_current.distance; }

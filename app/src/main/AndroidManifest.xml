@@ -3,7 +3,7 @@
 
     <application
         android:allowBackup="true"
-        android:label="Simple GLB Viewer"
+        android:label="Luxe Texture3D"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:theme="@android:style/Theme.Material.NoActionBar">

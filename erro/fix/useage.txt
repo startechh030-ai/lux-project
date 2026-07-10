@@ -1,0 +1,64 @@
+// ============================================================================
+// USAGE EXAMPLE - Integrate into your Activity/Renderer
+// ============================================================================
+
+// In your Activity onCreate():
+val camera = Camera(this)
+camera.setViewport(surfaceWidth, surfaceHeight)
+camera.setDamping(0.15f) // Nomad-like smoothness
+
+// Set mesh bounds after loading model (triggers auto-focus)
+camera.setMeshBounds(minX, minY, minZ, maxX, maxY, maxZ)
+camera.focusOnBounds() // Auto-frame the model
+
+// Attach touch listener to your GLSurfaceView/SurfaceView:
+surfaceView.setOnTouchListener { view, event -> camera.onTouch(view, event) }
+
+// In your render loop (every frame):
+override fun onDrawFrame(gl: GL10?) {
+    val dt = 1f / 60f // or actual delta time
+    camera.update(dt)
+
+    // Get matrices for Filament
+    val viewMatrix = camera.getViewMatrix()
+    val projMatrix = camera.getProjectionMatrix()
+
+    // Pass to Filament camera
+    filamentCamera.setModelMatrix(viewMatrix) // or inverse depending on Filament version
+    filamentCamera.setProjection(projMatrix)
+
+    // Update gizmo
+    axisGizmo.setCameraOrientation(camera.nativeGetYaw(), camera.nativeGetPitch())
+
+    // Render...
+}
+
+// Raycast example (e.g. on single tap to focus):
+val hit = camera.raycastScreen(tapX, tapY)
+if (hit != null) {
+    camera.focusOnPoint(hit[0], hit[1], hit[2], camera.nativeGetDistance())
+}
+
+// ============================================================================
+// KEY DIFFERENCES FROM YOUR OLD CAMERA:
+// ============================================================================
+// 1. TARGET-BASED ORBIT: Camera orbits around 'target' point, not itself
+//    -> Model stays centered like Nomad
+//
+// 2. SPHERICAL COORDINATES: yaw + pitch + distance
+//    -> Natural turntable feel, no gimbal lock issues
+//
+// 3. SMOOTH DAMPING: All values lerp toward target with configurable damping
+//    -> That fluid Nomad feel instead of robotic snapping
+//
+// 4. PAN MOVES TARGET: 2-finger drag shifts the pivot point
+//    -> Camera follows, model stays relative
+//
+// 5. ZOOM = DISTANCE: Pinch changes distance from target, not FOV
+//    -> Model scales while staying centered
+//
+// 6. AUTO-FOCUS: Computes distance to fit bounding sphere in view
+//    -> Double-tap or load to frame model perfectly
+//
+// 7. RAYCASTING: Screen-to-world ray with AABB intersection
+//    -> Tap to focus, future brush placement, etc.
