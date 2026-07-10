@@ -1,85 +1,132 @@
 package com.arena.simpleglbviewer
 
 import android.content.Context
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Paint
-import android.graphics.RectF
+import android.graphics.*
+import android.util.AttributeSet
+import android.view.MotionEvent
 import android.view.View
-import kotlin.math.cos
-import kotlin.math.sin
+import kotlin.math.*
 
-class AxisGizmoView(context: Context) : View(context) {
-    var yaw: Float = 0f
-        set(value) { field = value; invalidate() }
-    var pitch: Float = 0f
-        set(value) { field = value; invalidate() }
+class AxisGizmoView @JvmOverloads constructor(
+    context: Context,
+    attrs: AttributeSet? = null
+) : View(context, attrs) {
 
-    private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        strokeWidth = 7f
-        strokeCap = Paint.Cap.ROUND
+    enum class Axis { X, Y, Z }
+
+    private var currentYaw = 0f
+    private var currentPitch = 0f
+
+    private val paintX = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#FF4444")
+        strokeWidth = 4f
+        style = Paint.Style.STROKE
     }
-    private val spherePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+    private val paintY = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#44FF44")
+        strokeWidth = 4f
+        style = Paint.Style.STROKE
+    }
+    private val paintZ = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#4444FF")
+        strokeWidth = 4f
+        style = Paint.Style.STROKE
+    }
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
-        textSize = 24f
-        textAlign = Paint.Align.CENTER
-        typeface = android.graphics.Typeface.DEFAULT_BOLD
+        textSize = 28f
+        typeface = Typeface.DEFAULT_BOLD
     }
-    private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.argb(145, 8, 15, 25)
+    private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#CC000000")
         style = Paint.Style.FILL
+    }
+    private val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#666666")
+        style = Paint.Style.STROKE
+        strokeWidth = 2f
+    }
+
+    private var onGizmoClickListener: ((Axis) -> Unit)? = null
+
+    fun setOnGizmoClickListener(listener: (Axis) -> Unit) {
+        onGizmoClickListener = listener
+    }
+
+    fun updateRotation(yaw: Float, pitch: Float) {
+        currentYaw = yaw
+        currentPitch = pitch
+        invalidate()
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        val cx = width * 0.5f
-        val cy = height * 0.5f
-        val r = width.coerceAtMost(height) * 0.34f
 
-        canvas.drawRoundRect(RectF(6f, 6f, width - 6f, height - 6f), 22f, 22f, shadowPaint)
+        val cx = width / 2f
+        cy = height / 2f
+        val radius = min(cx, cy) - 20f
 
-        val axes = listOf(
-            Axis("X", Vec3(1f, 0f, 0f), Color.rgb(245, 70, 100)),
-            Axis("Y", Vec3(0f, 1f, 0f), Color.rgb(80, 210, 70)),
-            Axis("Z", Vec3(0f, 0f, 1f), Color.rgb(70, 145, 255))
-        ).map { axis ->
-            val v = rotateForCamera(axis.vec)
-            DrawAxis(axis.label, v.x, -v.y, v.z, axis.color)
-        }.sortedBy { it.depth }
+        // Background
+        canvas.drawCircle(cx, cy, radius + 10f, bgPaint)
+        canvas.drawCircle(cx, cy, radius + 10f, borderPaint)
 
-        for (a in axes) {
-            linePaint.color = a.color
-            val ex = cx + a.x * r
-            val ey = cy + a.y * r
-            canvas.drawLine(cx, cy, ex, ey, linePaint)
-            spherePaint.color = a.color
-            canvas.drawCircle(ex, ey, 16f, spherePaint)
-            canvas.drawText(a.label, ex, ey + 8f, textPaint)
+        // Project axes based on camera orientation
+        // Camera yaw/pitch determine which axes are visible
+        val cosP = cos(currentPitch)
+        val sinP = sin(currentPitch)
+        val cosY = cos(currentYaw)
+        val sinY = sin(currentYaw)
+
+        // X axis (red) - world right
+        val xEnd = projectAxis(1f, 0f, 0f, cx, cy, radius)
+        canvas.drawLine(cx, cy, xEnd.first, xEnd.second, paintX)
+        canvas.drawText("X", xEnd.first + 10f, xEnd.second, textPaint)
+
+        // Y axis (green) - world up
+        val yEnd = projectAxis(0f, 1f, 0f, cx, cy, radius)
+        canvas.drawLine(cx, cy, yEnd.first, yEnd.second, paintY)
+        canvas.drawText("Y", yEnd.first, yEnd.second - 10f, textPaint)
+
+        // Z axis (blue) - world forward
+        val zEnd = projectAxis(0f, 0f, 1f, cx, cy, radius)
+        canvas.drawLine(cx, cy, zEnd.first, zEnd.second, paintZ)
+        canvas.drawText("Z", zEnd.first + 10f, zEnd.second + 20f, textPaint)
+    }
+
+    private fun projectAxis(x: Float, y: Float, z: Float, cx: Float, cy: Float, scale: Float): Pair<Float, Float> {
+        // Apply inverse camera rotation to show axes relative to camera view
+        val cosP = cos(currentPitch)
+        val sinP = sin(currentPitch)
+        val cosY = cos(currentYaw)
+        val sinY = sin(currentYaw)
+
+        // Rotate by inverse camera orientation
+        val rx = x * cosY + z * sinY
+        val ry = y * cosP - (-x * sinY + z * cosY) * sinP
+        val rz = -(x * sinY - z * cosY) // depth
+
+        // Simple perspective: scale by depth
+        val depthScale = if (rz > 0) 1f else 0.6f
+        val px = cx + rx * scale * 0.6f * depthScale
+        val py = cy - ry * scale * 0.6f * depthScale
+
+        return Pair(px, py)
+    }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (event.action == MotionEvent.ACTION_DOWN) {
+            val cx = width / 2f
+            val cy = height / 2f
+            val dx = event.x - cx
+            val dy = event.y - cy
+            // Simple axis detection based on angle
+            val angle = atan2(dy, dx)
+            when {
+                abs(angle) < PI / 6 -> onGizmoClickListener?.invoke(Axis.X)
+                abs(angle - PI / 2) < PI / 6 -> onGizmoClickListener?.invoke(Axis.Y)
+                abs(angle + PI / 2) < PI / 6 -> onGizmoClickListener?.invoke(Axis.Z)
+            }
         }
-
-        spherePaint.color = Color.argb(230, 230, 230, 235)
-        canvas.drawCircle(cx, cy, 9f, spherePaint)
+        return true
     }
-
-    private fun rotateForCamera(v: Vec3): Vec3 {
-        // Match the scene camera yaw/pitch enough for a viewport orientation widget.
-        val cy = cos(-yaw)
-        val sy = sin(-yaw)
-        var x = v.x * cy + v.z * sy
-        var z = -v.x * sy + v.z * cy
-        var y = v.y
-
-        val cp = cos(-pitch)
-        val sp = sin(-pitch)
-        val y2 = y * cp - z * sp
-        val z2 = y * sp + z * cp
-        y = y2
-        z = z2
-        return Vec3(x, y, z)
-    }
-
-    private data class Vec3(val x: Float, val y: Float, val z: Float)
-    private data class Axis(val label: String, val vec: Vec3, val color: Int)
-    private data class DrawAxis(val label: String, val x: Float, val y: Float, val depth: Float, val color: Int)
 }
