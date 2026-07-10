@@ -26,7 +26,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.nio.ByteBuffer
 
-class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
+class MainActivity : ComponentActivity(), Choreographer.FrameCallback, EditorChromeView.Listener {
     private lateinit var root: FrameLayout
     private lateinit var surfaceView: SurfaceView
     private lateinit var engine: Engine
@@ -59,14 +59,7 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
         surfaceView = SurfaceView(this)
         root.addView(surfaceView, FrameLayout.LayoutParams(-1, -1))
 
-        val chromeView = EditorChromeView(this).apply {
-            isClickable = false
-            isFocusable = false
-        }
-        root.addView(chromeView, FrameLayout.LayoutParams(-1, -1))
-
-        // Dedicated transparent gesture layer. This is more reliable than attaching
-        // touch directly to SurfaceView when Android overlays are above it.
+        // Dedicated transparent gesture layer for camera controls.
         val gestureLayer = View(this).apply {
             setBackgroundColor(Color.TRANSPARENT)
             setOnTouchListener { _, event ->
@@ -76,20 +69,11 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
         }
         root.addView(gestureLayer, FrameLayout.LayoutParams(-1, -1))
 
-        val pickButton = ImageButton(this).apply {
-            setImageResource(android.R.drawable.ic_menu_upload)
-            setColorFilter(Color.WHITE)
-            setBackgroundColor(Color.argb(230, 56, 189, 248))
-            contentDescription = "Pick GLB file"
-            setPadding(22, 22, 22, 22)
-            setOnClickListener { openFilePicker() }
+        // Interactive Editor Chrome on top.
+        val chromeView = EditorChromeView(this).apply {
+            listener = this@MainActivity
         }
-        val buttonSize = (64 * resources.displayMetrics.density).toInt()
-        val buttonParams = FrameLayout.LayoutParams(buttonSize, buttonSize, Gravity.TOP or Gravity.START).apply {
-            topMargin = (24 * resources.displayMetrics.density).toInt()
-            leftMargin = (18 * resources.displayMetrics.density).toInt()
-        }
-        root.addView(pickButton, buttonParams)
+        root.addView(chromeView, FrameLayout.LayoutParams(-1, -1))
 
         axisGizmoView = AxisGizmoView(this)
         val gizmoSize = (118 * resources.displayMetrics.density).toInt()
@@ -100,7 +84,7 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
         root.addView(axisGizmoView, gizmoParams)
 
         statusText = TextView(this).apply {
-            text = "Tap the icon to pick a .glb file"
+            text = "Tap 'Open' to pick a .glb file"
             setTextColor(Color.WHITE)
             textSize = 14f
             setPadding(16, 10, 16, 10)
@@ -109,6 +93,14 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
         root.addView(statusText, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
 
         setContentView(root)
+    }
+
+    override fun onButtonClick(label: String) {
+        when (label) {
+            "Open" -> openFilePicker()
+            "Reset" -> NativeCamera.resetToDefault()
+            else -> Toast.makeText(this, "Tool '$label' is not implemented yet", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun setupFilament() {
