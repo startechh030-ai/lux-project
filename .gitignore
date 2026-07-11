@@ -1,3 +1,9 @@
-.gradle
-/.gradle
-.env
+.gradle/
+.idea/
+local.properties
+*.iml
+.cxx/
+app/.cxx/
+app/build/
+build/
+.DS_Store

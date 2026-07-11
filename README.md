@@ -1,37 +1,41 @@
-# Luxe Texture3D
+# Luxe Texture3D — Viewer Milestone 1
 
-Package/application id:
+Android GLB viewer for **Android 8.0 through Android 16** (`minSdk 26`, `targetSdk 36`).
 
-```txt
-luxe.texture3d.app
-```
+## Included
 
-## Current step: static camera, centered model orbit
+- Filament GLB rendering and PBR materials
+- Shanghai Bund 2K HDR preprocessed into Filament IBL and skybox KTX assets
+- C++17/JNI camera math with frame-rate-independent exponential smoothing
+- One-finger orbit, pinch zoom, two-finger pan, double-tap reset
+- Android system file picker; no storage permission required
+- Landscape-first minimal UI
+- GitHub Actions debug APK build
 
-We simplified the viewport behavior:
+## Build without Android Studio
 
-```txt
-Import GLB
-→ model is centered with ModelViewer.transformToUnitCube()
-→ camera stays static
-→ tiny dot stays at screen center as pivot marker
-→ 1 finger drag rotates the model around that center pivot
-→ pinch zoom scales the model from the same pivot
-→ no panning / no random movement
-```
+1. Create a GitHub repository and upload all files in this directory.
+2. Open **Actions → Build Android APK → Run workflow**.
+3. When complete, open the workflow run and download `LuxeTexture3D-debug-apk`.
+4. Extract the ZIP and install `app-debug.apk` on your Android device.
 
-Main new files:
+Android may ask you to allow installation from your browser/file manager. The debug APK is intended only for development testing.
 
-```txt
-ModelOrbitController.kt
-PivotDotView.kt
-```
+## Controls
 
-Current active gesture logic is Kotlin-side only for stability. The uploaded native camera files remain in the project, but this step does not depend on native camera movement.
+- **Open icon:** choose a `.glb` from Android's file manager
+- **One finger:** orbit
+- **Pinch:** zoom
+- **Two fingers:** pan
+- **Double tap:** reset camera
 
-Expected feel:
+## Architecture
 
-- model should stay centered
-- model should rotate in-place
-- tiny dot marks the orbit/pivot center
-- gizmo updates with model orbit
+Kotlin owns Android lifecycle, UI, file selection, gesture recognition, and Filament calls. C++ owns camera state, orbit/pan/zoom math, clamping, and smoothing. JNI exposes only viewport, input, reset, and per-frame camera-pose methods.
+
+## HDR note
+
+The supplied `shanghai_bund_2k.hdr.txt` was verified as Radiance HDR data, renamed to `.hdr`, and converted offline with Filament `cmgen` 1.69.4. Runtime assets are:
+
+- `app/src/main/assets/environments/shanghai_bund_2k_ibl.ktx`
+- `app/src/main/assets/environments/shanghai_bund_2k_skybox.ktx`

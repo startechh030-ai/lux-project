@@ -1,257 +1,173 @@
 package luxe.texture3d.app
 
-import android.app.Activity
-import android.content.Intent
-import android.graphics.Color
+import androidx.appcompat.app.AppCompatActivity
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
 import android.view.Choreographer
+import android.view.GestureDetector
 import android.view.Gravity
+import android.view.MotionEvent
+import android.view.ScaleGestureDetector
 import android.view.SurfaceView
 import android.view.View
+import android.view.WindowInsets
 import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.TextView
 import android.widget.Toast
-import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
-import com.google.android.filament.Engine
-import com.google.android.filament.EntityManager
-import com.google.android.filament.LightManager
-import com.google.android.filament.Skybox
+import com.google.android.filament.utils.KTX1Loader
 import com.google.android.filament.utils.ModelViewer
 import com.google.android.filament.utils.Utils
-import java.io.File
-import java.io.FileOutputStream
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
-class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
-    private lateinit var root: FrameLayout
-    private lateinit var surfaceView: SurfaceView
-    private lateinit var engine: Engine
-    private lateinit var modelViewer: ModelViewer
-    private lateinit var statusText: TextView
-    private lateinit var camera: Camera
-    private var lastFrameTimeNanos: Long = 0L
+class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
+    private lateinit var surface: SurfaceView
+    private lateinit var viewer: ModelViewer
+    private lateinit var status: TextView
+    private val nativeCamera = NativeCamera()
+    private var rendering = false
 
-    private val pickGlb = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            result.data?.data?.let { uri -> loadGlbFromUri(uri) }
-        }
+    private val openModel = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) loadGlb(uri)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Utils.init()
-        buildUi()
-        setupFilament()
-        setupCamera()
-    }
-
-    private fun buildUi() {
-        root = FrameLayout(this)
-        root.setBackgroundColor(Color.rgb(16, 18, 22))
-
-        surfaceView = SurfaceView(this)
-        root.addView(surfaceView, FrameLayout.LayoutParams(-1, -1))
-
-        val chromeView = EditorChromeView(this).apply {
-            isClickable = false
-            isFocusable = false
+        window.statusBarColor = 0xff0f172a.toInt()
+        window.navigationBarColor = 0xff0f172a.toInt()
+        if (android.os.Build.VERSION.SDK_INT >= 30) {
+            window.insetsController?.hide(WindowInsets.Type.statusBars())
+        } else @Suppress("DEPRECATION") run {
+            window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
         }
-        root.addView(chromeView, FrameLayout.LayoutParams(-1, -1))
 
-        // Gesture layer — ALL touch goes to orbit camera now
-        val gestureLayer = View(this).apply {
-            setBackgroundColor(Color.TRANSPARENT)
-            setOnTouchListener { _, event ->
-                camera.onTouch(this, event)
-                true
-            }
-        }
-        root.addView(gestureLayer, FrameLayout.LayoutParams(-1, -1))
+        val root = FrameLayout(this).apply { setBackgroundColor(0xff0f172a.toInt()) }
+        surface = SurfaceView(this).apply { setZOrderOnTop(false) }
+        root.addView(surface, FrameLayout.LayoutParams(-1, -1))
 
-        val pickButton = ImageButton(this).apply {
-            setImageResource(android.R.drawable.ic_menu_upload)
-            setColorFilter(Color.WHITE)
-            setBackgroundColor(Color.argb(230, 56, 189, 248))
-            contentDescription = "Pick GLB file"
-            setPadding(22, 22, 22, 22)
-            setOnClickListener { openFilePicker() }
+        val open = ImageButton(this).apply {
+            setImageResource(luxe.texture3d.app.R.drawable.ic_open)
+            contentDescription = "Open GLB model"
+            setBackgroundResource(luxe.texture3d.app.R.drawable.panel_bg)
+            setColorFilter(0xffbae6fd.toInt())
+            setPadding(dp(12), dp(12), dp(12), dp(12))
+            setOnClickListener { openModel.launch(arrayOf("model/gltf-binary", "application/octet-stream", "*/*")) }
         }
-        val buttonSize = (64 * resources.displayMetrics.density).toInt()
-        val buttonParams = FrameLayout.LayoutParams(buttonSize, buttonSize, Gravity.TOP or Gravity.START).apply {
-            topMargin = (24 * resources.displayMetrics.density).toInt()
-            leftMargin = (18 * resources.displayMetrics.density).toInt()
-        }
-        root.addView(pickButton, buttonParams)
+        root.addView(open, FrameLayout.LayoutParams(dp(52), dp(52), Gravity.TOP or Gravity.START).apply {
+            leftMargin = dp(16); topMargin = dp(16)
+        })
 
-        statusText = TextView(this).apply {
-            text = "Tap the icon to pick a .glb file"
-            setTextColor(Color.WHITE)
-            textSize = 14f
-            setPadding(16, 10, 16, 10)
-            setBackgroundColor(Color.argb(185, 0, 0, 0))
+        status = TextView(this).apply {
+            text = "OPEN A GLB  •  Drag: orbit  •  Pinch: zoom  •  Two fingers: pan"
+            setTextColor(0xffbae6fd.toInt()); textSize = 12f; gravity = Gravity.CENTER
+            setBackgroundResource(luxe.texture3d.app.R.drawable.panel_bg)
+            setPadding(dp(16), 0, dp(16), 0)
         }
-        root.addView(statusText, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
-
+        root.addView(status, FrameLayout.LayoutParams(-2, dp(38), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
+            bottomMargin = dp(12)
+        })
         setContentView(root)
-    }
 
-    private fun setupFilament() {
-        engine = Engine.create()
-        modelViewer = ModelViewer(surfaceView, engine)
-        modelViewer.scene.skybox = Skybox.Builder()
-            .color(0.075f, 0.083f, 0.105f, 1.0f)
-            .build(engine)
-
-        // Soft main light
-        val sun = EntityManager.get().create()
-        LightManager.Builder(LightManager.Type.SUN)
-            .color(1.0f, 0.96f, 0.88f)
-            .intensity(95_000.0f)
-            .direction(0.35f, -0.7f, -0.45f)
-            .castShadows(true)
-            .build(engine, sun)
-        modelViewer.scene.addEntity(sun)
-    }
-
-    private fun setupCamera() {
-        camera = Camera(this)
-        camera.setViewport(surfaceView.width, surfaceView.height)
-        camera.setFov(45f)
-        camera.setDamping(0.12f) // Nomad-like smooth feel
-    }
-
-    override fun onResume() {
-        super.onResume()
-        Choreographer.getInstance().postFrameCallback(this)
-    }
-
-    override fun onPause() {
-        Choreographer.getInstance().removeFrameCallback(this)
-        super.onPause()
-    }
-
-    override fun onDestroy() {
-        camera.destroy()
-        super.onDestroy()
-    }
-
-    override fun doFrame(frameTimeNanos: Long) {
-        if (::modelViewer.isInitialized && surfaceView.width > 0 && surfaceView.height > 0) {
-            val delta = if (lastFrameTimeNanos == 0L) 1f / 60f
-            else ((frameTimeNanos - lastFrameTimeNanos) / 1_000_000_000f).coerceIn(0.001f, 0.08f)
-            lastFrameTimeNanos = frameTimeNanos
-
-            val aspect = surfaceView.width.toDouble() / surfaceView.height.toDouble()
-
-            // Update orbit camera
-            camera.setViewport(surfaceView.width, surfaceView.height)
-            camera.update(delta)
-
-            // Apply camera to Filament
-            val viewMat = camera.getViewMatrix()
-            val projMat = camera.getProjectionMatrix()
-            modelViewer.camera.setCustomProjection(
-                projMat.toDoubleArray(),
-                0.03,
-                1000.0
-            )
-            modelViewer.camera.modelMatrix = viewMat.toDoubleArray().invertViewToModel()
-
-            modelViewer.render(frameTimeNanos)
+        viewer = ModelViewer(surface, manipulator = null)
+        loadEnvironment()
+        installTouchController()
+        surface.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            nativeCamera.nativeSetViewport(surface.width.coerceAtLeast(1), surface.height.coerceAtLeast(1))
         }
-        Choreographer.getInstance().postFrameCallback(this)
+        nativeCamera.nativeReset()
     }
 
-    // Helper: convert view matrix to camera model matrix (inverse)
-    private fun DoubleArray.invertViewToModel(): DoubleArray {
-        // For a lookAt view matrix, the camera model matrix is the inverse
-        // We can extract position from the view matrix and rebuild
-        val m = this
-        // Right, Up, Forward vectors from view matrix
-        val rx = m[0]; val ry = m[4]; val rz = m[8]
-        val ux = m[1]; val uy = m[5]; val uz = m[9]
-        val fx = -m[2]; val fy = -m[6]; val fz = -m[10]
-        val tx = m[12]; val ty = m[13]; val tz = m[14]
-
-        // eye = -(R^T * t)
-        val ex = -(rx * tx + ry * ty + rz * tz)
-        val ey = -(ux * tx + uy * ty + uz * tz)
-        val ez = -(fx * tx + fy * ty + fz * tz)
-
-        // Build model matrix (column-major)
-        return doubleArrayOf(
-            rx, ux, -fx, 0.0,
-            ry, uy, -fy, 0.0,
-            rz, uz, -fz, 0.0,
-            ex, ey, ez, 1.0
-        )
-    }
-
-    private fun FloatArray.toDoubleArray(): DoubleArray {
-        return DoubleArray(size) { this[it].toDouble() }
-    }
-
-    private fun openFilePicker() {
-        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = "*/*"
-            putExtra(
-                Intent.EXTRA_MIME_TYPES,
-                arrayOf("model/gltf-binary", "model/gltf+json", "application/octet-stream")
-            )
+    private fun loadEnvironment() {
+        val ibl = readAsset("environments/shanghai_bund_2k_ibl.ktx")
+        KTX1Loader.createIndirectLight(viewer.engine, ibl).also { bundle ->
+            viewer.scene.indirectLight = bundle.indirectLight
+            viewer.indirectLightCubemap = bundle.cubemap
+            bundle.indirectLight.intensity = 30_000f
         }
-        pickGlb.launch(intent)
+        val sky = readAsset("environments/shanghai_bund_2k_skybox.ktx")
+        KTX1Loader.createSkybox(viewer.engine, sky).also { bundle ->
+            viewer.scene.skybox = bundle.skybox
+            viewer.skyboxCubemap = bundle.cubemap
+        }
     }
 
-    private fun loadGlbFromUri(uri: Uri) {
-        val name = displayName(uri) ?: "model.glb"
-        statusText.text = "Loading $name ..."
+    private fun readAsset(path: String): ByteBuffer {
+        val bytes = assets.open(path).use { it.readBytes() }
+        return ByteBuffer.allocateDirect(bytes.size).order(ByteOrder.nativeOrder()).apply { put(bytes); flip() }
+    }
 
-        runCatching {
-            val file = copyUriToCache(uri, name)
-            val bytes = file.readBytes()
-            val buffer = ByteBuffer.allocateDirect(bytes.size)
-            buffer.put(bytes)
-            buffer.rewind()
+    private fun loadGlb(uri: Uri) {
+        try {
+            val name = displayName(uri)
+            if (!name.lowercase().endsWith(".glb")) throw IllegalArgumentException("Please choose a .glb file")
+            status.text = "LOADING  •  $name"
+            val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                ?: throw IllegalStateException("The selected file could not be opened")
+            if (bytes.size > 300 * 1024 * 1024) throw IllegalArgumentException("GLB is larger than the 300 MB safety limit")
+            val buffer = ByteBuffer.allocateDirect(bytes.size).order(ByteOrder.nativeOrder()).apply { put(bytes); flip() }
+            viewer.loadModelGlb(buffer)
+            if (viewer.asset == null) throw IllegalArgumentException("Filament could not parse this GLB")
+            viewer.transformToUnitCube()
+            nativeCamera.nativeReset()
+            status.text = "$name  •  ORBIT VIEW"
+        } catch (e: Exception) {
+            status.text = "NO MODEL LOADED"
+            Toast.makeText(this, e.message ?: "Could not load GLB", Toast.LENGTH_LONG).show()
+        }
+    }
 
-            modelViewer.destroyModel()
-            modelViewer.loadModelGlb(buffer)
-            modelViewer.transformToUnitCube()
+    private fun displayName(uri: Uri): String {
+        contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
+            if (it.moveToFirst()) return it.getString(0)
+        }
+        return uri.lastPathSegment ?: "model.glb"
+    }
 
-            // Set mesh bounds and auto-focus camera
-            val bbox = modelViewer.asset?.boundingBox
-            if (bbox != null) {
-                val min = bbox.center.let { c -> c.minus(bbox.halfExtent) }
-                val max = bbox.center.let { c -> c.plus(bbox.halfExtent) }
-                camera.setMeshBounds(min.x, min.y, min.z, max.x, max.y, max.z)
-                camera.focusOnBounds()
+    private fun installTouchController() {
+        val scale = ScaleGestureDetector(this, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            override fun onScale(detector: ScaleGestureDetector): Boolean {
+                nativeCamera.nativeZoom(detector.scaleFactor); return true
             }
-
-            statusText.text = "Loaded: $name | orbit to rotate, pinch to zoom, 2-finger drag to pan"
-        }.onFailure { error ->
-            statusText.text = "Failed to load GLB"
-            Toast.makeText(this, error.message ?: "Unknown error", Toast.LENGTH_LONG).show()
+        })
+        val taps = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onDown(e: MotionEvent) = true
+            override fun onDoubleTap(e: MotionEvent): Boolean {
+                nativeCamera.nativeReset(); status.text = "CAMERA RESET"; return true
+            }
+        })
+        var lastX = 0f; var lastY = 0f; var lastCount = 0
+        surface.setOnTouchListener { _, event ->
+            scale.onTouchEvent(event); taps.onTouchEvent(event)
+            val count = event.pointerCount
+            val cx = (0 until count).sumOf { event.getX(it).toDouble() }.toFloat() / count
+            val cy = (0 until count).sumOf { event.getY(it).toDouble() }.toFloat() / count
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> { lastX = cx; lastY = cy; lastCount = count }
+                MotionEvent.ACTION_MOVE -> {
+                    if (!scale.isInProgress && count == lastCount) {
+                        if (count == 1) nativeCamera.nativeOrbit(cx-lastX, cy-lastY)
+                        else if (count >= 2) nativeCamera.nativePan(cx-lastX, cy-lastY)
+                    }
+                    lastX = cx; lastY = cy; lastCount = count
+                }
+                MotionEvent.ACTION_POINTER_UP -> { lastCount = -1 }
+            }
+            true
         }
     }
 
-    private fun copyUriToCache(uri: Uri, fileName: String): File {
-        val safeName = fileName.replace(Regex("[^A-Za-z0-9._-]"), "_").ifBlank { "model.glb" }
-        val outFile = File(cacheDir, safeName)
-        contentResolver.openInputStream(uri).use { input ->
-            requireNotNull(input) { "Cannot open selected file" }
-            FileOutputStream(outFile).use { output -> input.copyTo(output) }
-        }
-        return outFile
+    override fun onResume() { super.onResume(); rendering = true; Choreographer.getInstance().postFrameCallback(this) }
+    override fun onPause() { rendering = false; Choreographer.getInstance().removeFrameCallback(this); super.onPause() }
+    override fun doFrame(frameTimeNanos: Long) {
+        if (!rendering) return
+        val p = nativeCamera.nativeUpdate(frameTimeNanos / 1_000_000_000.0)
+        viewer.camera.lookAt(p[0].toDouble(), p[1].toDouble(), p[2].toDouble(), p[3].toDouble(), p[4].toDouble(), p[5].toDouble(), 0.0, 1.0, 0.0)
+        viewer.render(frameTimeNanos)
+        Choreographer.getInstance().postFrameCallback(this)
     }
-
-    private fun displayName(uri: Uri): String? {
-        return contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-            val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-            if (cursor.moveToFirst() && index >= 0) cursor.getString(index) else null
-        }
-    }
+    private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
 }

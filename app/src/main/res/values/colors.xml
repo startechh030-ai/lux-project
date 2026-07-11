@@ -1,3 +1,6 @@
 <resources>
-    <color name="ic_launcher_background">#0F172A</color>
+    <color name="luxe_bg">#0F172A</color>
+    <color name="luxe_panel">#D9121922</color>
+    <color name="luxe_blue">#38BDF8</color>
+    <color name="luxe_blue_light">#BAE6FD</color>
 </resources>
