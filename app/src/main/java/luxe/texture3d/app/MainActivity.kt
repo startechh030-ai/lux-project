@@ -86,7 +86,7 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
         KTX1Loader.createIndirectLight(viewer.engine, ibl).also { bundle ->
             viewer.scene.indirectLight = bundle.indirectLight
             viewer.indirectLightCubemap = bundle.cubemap
-            bundle.indirectLight.intensity = 30_000f
+            bundle.indirectLight?.intensity = 30_000f
         }
         val sky = readAsset("environments/shanghai_bund_2k_skybox.ktx")
         KTX1Loader.createSkybox(viewer.engine, sky).also { bundle ->
