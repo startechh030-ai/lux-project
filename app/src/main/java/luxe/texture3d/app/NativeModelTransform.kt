@@ -33,6 +33,27 @@ object NativeModelTransform {
         )
     }
 
+
+    fun fromOrbitCamera(camera: Camera): FloatArray {
+        val target = camera.getTarget()
+        val yaw = camera.nativeGetYaw()
+        val pitch = camera.nativeGetPitch()
+        val distance = camera.nativeGetDistance().coerceIn(0.1f, 1000f)
+
+        val s = (5.0f / distance).coerceIn(0.03f, 8.0f)
+        val cy = cos(yaw)
+        val sy = sin(yaw)
+        val cp = cos(pitch)
+        val sp = sin(pitch)
+
+        return floatArrayOf(
+            cy * s,        0f,      -sy * s,       0f,
+            sy * sp * s,   cp * s,   cy * sp * s,  0f,
+            sy * cp * s,  -sp * s,   cy * cp * s,  0f,
+            target[0],     target[1], target[2],   1f
+        )
+    }
+
     fun multiplyColumnMajor(a: FloatArray, b: FloatArray): FloatArray {
         val out = FloatArray(16)
         for (col in 0..3) {

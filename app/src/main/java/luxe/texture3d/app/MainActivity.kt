@@ -26,14 +26,14 @@ import java.io.File
 import java.io.FileOutputStream
 import java.nio.ByteBuffer
 
-class MainActivity : ComponentActivity(), Choreographer.FrameCallback, EditorChromeView.Listener {
+class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
     private lateinit var root: FrameLayout
     private lateinit var surfaceView: SurfaceView
     private lateinit var engine: Engine
     private lateinit var modelViewer: ModelViewer
     private lateinit var statusText: TextView
-    private lateinit var axisGizmoView: AxisGizmoView
-    private lateinit var gestureHandler: NativeCameraGestureHandler
+    private lateinit var axisGizmo: AxisGizmo
+    private val modelOrbit = ModelOrbitController()
     private var lastFrameTimeNanos: Long = 0L
     private var baseModelTransform: FloatArray? = null
 
@@ -46,8 +46,6 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback, EditorChr
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Utils.init()
-        NativeCamera.init()
-        gestureHandler = NativeCameraGestureHandler(this)
         buildUi()
         setupFilament()
     }
@@ -59,32 +57,55 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback, EditorChr
         surfaceView = SurfaceView(this)
         root.addView(surfaceView, FrameLayout.LayoutParams(-1, -1))
 
-        // Dedicated transparent gesture layer for camera controls.
+        val chromeView = EditorChromeView(this).apply {
+            isClickable = false
+            isFocusable = false
+        }
+        root.addView(chromeView, FrameLayout.LayoutParams(-1, -1))
+
+        // Dedicated transparent gesture layer. This is more reliable than attaching
+        // touch directly to SurfaceView when Android overlays are above it.
         val gestureLayer = View(this).apply {
             setBackgroundColor(Color.TRANSPARENT)
             setOnTouchListener { _, event ->
-                gestureHandler.onTouchEvent(event)
+                modelOrbit.onTouch(event)
                 true
             }
         }
         root.addView(gestureLayer, FrameLayout.LayoutParams(-1, -1))
 
-        // Interactive Editor Chrome on top.
-        val chromeView = EditorChromeView(this).apply {
-            listener = this@MainActivity
+        val pivotDot = PivotDotView(this).apply {
+            isClickable = false
+            isFocusable = false
         }
-        root.addView(chromeView, FrameLayout.LayoutParams(-1, -1))
+        val dotSize = (24 * resources.displayMetrics.density).toInt()
+        root.addView(pivotDot, FrameLayout.LayoutParams(dotSize, dotSize, Gravity.CENTER))
 
-        axisGizmoView = AxisGizmoView(this)
+        val pickButton = ImageButton(this).apply {
+            setImageResource(android.R.drawable.ic_menu_upload)
+            setColorFilter(Color.WHITE)
+            setBackgroundColor(Color.argb(230, 56, 189, 248))
+            contentDescription = "Pick GLB file"
+            setPadding(22, 22, 22, 22)
+            setOnClickListener { openFilePicker() }
+        }
+        val buttonSize = (64 * resources.displayMetrics.density).toInt()
+        val buttonParams = FrameLayout.LayoutParams(buttonSize, buttonSize, Gravity.TOP or Gravity.START).apply {
+            topMargin = (24 * resources.displayMetrics.density).toInt()
+            leftMargin = (18 * resources.displayMetrics.density).toInt()
+        }
+        root.addView(pickButton, buttonParams)
+
+        axisGizmo = AxisGizmo(this)
         val gizmoSize = (118 * resources.displayMetrics.density).toInt()
         val gizmoParams = FrameLayout.LayoutParams(gizmoSize, gizmoSize, Gravity.TOP or Gravity.END).apply {
             topMargin = (14 * resources.displayMetrics.density).toInt()
             rightMargin = (14 * resources.displayMetrics.density).toInt()
         }
-        root.addView(axisGizmoView, gizmoParams)
+        root.addView(axisGizmo, gizmoParams)
 
         statusText = TextView(this).apply {
-            text = "Tap 'Open' to pick a .glb file"
+            text = "Tap the icon to pick a .glb file"
             setTextColor(Color.WHITE)
             textSize = 14f
             setPadding(16, 10, 16, 10)
@@ -93,14 +114,6 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback, EditorChr
         root.addView(statusText, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
 
         setContentView(root)
-    }
-
-    override fun onButtonClick(label: String) {
-        when (label) {
-            "Open" -> openFilePicker()
-            "Reset" -> NativeCamera.resetToDefault()
-            else -> Toast.makeText(this, "Tool '$label' is not implemented yet", Toast.LENGTH_SHORT).show()
-        }
     }
 
     private fun setupFilament() {
@@ -132,7 +145,6 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback, EditorChr
     }
 
     override fun onDestroy() {
-        NativeCamera.destroy()
         super.onDestroy()
     }
 
@@ -143,20 +155,16 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback, EditorChr
             lastFrameTimeNanos = frameTimeNanos
 
             val aspect = surfaceView.width.toDouble() / surfaceView.height.toDouble()
-            NativeCamera.setScreenSize(surfaceView.width, surfaceView.height)
-            NativeCamera.update(delta)
-            val cameraState = NativeCamera.getCameraState()
             applyStableCamera(aspect)
-            applyNativeModelTransform(cameraState)
-            updateGizmo(cameraState)
+            applyModelOrbitTransform()
+            updateGizmo()
             modelViewer.render(frameTimeNanos)
         }
         Choreographer.getInstance().postFrameCallback(this)
     }
 
     private fun applyStableCamera(aspect: Double) {
-        // ModelViewer may control its internal camera during render(), so for now
-        // we keep camera stable and apply native orbit/zoom/pan to the model root.
+        // Camera stays static. Only the model root rotates/scales around the center pivot.
         modelViewer.camera.setProjection(45.0, aspect, 0.05, 1000.0, com.google.android.filament.Camera.Fov.VERTICAL)
         modelViewer.camera.lookAt(
             0.0, 0.0, 3.0,
@@ -165,20 +173,18 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback, EditorChr
         )
     }
 
-    private fun applyNativeModelTransform(cameraState: FloatArray) {
+    private fun applyModelOrbitTransform() {
         val asset = modelViewer.asset ?: return
         val base = baseModelTransform ?: return
         val tm = engine.transformManager
         val instance = tm.getInstance(asset.root)
-        val gestureTransform = NativeModelTransform.fromCameraState(cameraState)
-        val finalTransform = NativeModelTransform.multiplyColumnMajor(gestureTransform, base)
+        val finalTransform = NativeModelTransform.multiplyColumnMajor(modelOrbit.transformMatrix(), base)
         tm.setTransform(instance, finalTransform)
     }
 
-    private fun updateGizmo(cameraState: FloatArray) {
-        if (::axisGizmoView.isInitialized) {
-            axisGizmoView.yaw = cameraState[9]
-            axisGizmoView.pitch = cameraState[10]
+    private fun updateGizmo() {
+        if (::axisGizmo.isInitialized) {
+            axisGizmo.setCameraOrientation(modelOrbit.yaw, modelOrbit.pitch)
         }
     }
 
@@ -209,10 +215,10 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback, EditorChr
             modelViewer.loadModelGlb(buffer)
             modelViewer.transformToUnitCube()
             captureBaseModelTransform()
-            NativeCamera.reset(0f, 0f, 0f, 1f)
+            modelOrbit.reset()
             lastFrameTimeNanos = 0L
 
-            statusText.text = "Loaded: $name | 1 finger orbit, pinch zoom, 2 fingers pan"
+            statusText.text = "Loaded: $name | 1 finger rotate model, pinch zoom. Camera stays fixed."
         }.onFailure { error ->
             statusText.text = "Failed to load GLB"
             Toast.makeText(this, error.message ?: "Unknown error", Toast.LENGTH_LONG).show()

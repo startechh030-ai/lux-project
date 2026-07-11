@@ -1,66 +1,37 @@
-# LuxeTexture3D
+# Luxe Texture3D
 
-Current milestone:
-
-```txt
-Landscape editor shell
-→ user taps file picker icon
-→ selects .glb
-→ Filament renders it
-→ native C++ camera handles orbit / pan / zoom
-→ Kotlin applies native camera state to Filament
-→ axis gizmo stays top-right
-```
-
-## Gesture controls
-
-- **1 finger drag:** orbit camera
-- **2 finger pinch:** zoom in/out
-- **2 finger drag together:** pan camera/target left/right/up/down
-- **Double tap:** reset camera
-
-## Native camera wiring
-
-C++ files:
+Package/application id:
 
 ```txt
-app/src/main/cpp/CMakeLists.txt
-app/src/main/cpp/NativeCamera.cpp
+luxe.texture3d.app
 ```
 
-Kotlin JNI bridge:
+## Current step: static camera, centered model orbit
+
+We simplified the viewport behavior:
 
 ```txt
-app/src/main/java/com/arena/simpleglbviewer/NativeCamera.kt
-app/src/main/java/com/arena/simpleglbviewer/NativeCameraGestureHandler.kt
+Import GLB
+→ model is centered with ModelViewer.transformToUnitCube()
+→ camera stays static
+→ tiny dot stays at screen center as pivot marker
+→ 1 finger drag rotates the model around that center pivot
+→ pinch zoom scales the model from the same pivot
+→ no panning / no random movement
 ```
 
-This does not link Filament from C++. Native code only calculates camera math and returns eye/target/up/yaw/pitch. Kotlin applies it to Filament. This keeps GitHub Actions simple and avoids native Filament package headaches.
-
-## UI
-
-A lightweight editor chrome overlay is included:
+Main new files:
 
 ```txt
-EditorChromeView.kt
+ModelOrbitController.kt
+PivotDotView.kt
 ```
 
-It is only visual for now. Real buttons/tools will be wired one by one.
+Current active gesture logic is Kotlin-side only for stability. The uploaded native camera files remain in the project, but this step does not depend on native camera movement.
 
-## Build
+Expected feel:
 
-```bash
-gradle assembleDebug
-```
-
-GitHub Actions workflow included at:
-
-```txt
-.github/workflows/android-apk.yml
-```
-
-APK artifact:
-
-```txt
-app/build/outputs/apk/debug/app-debug.apk
-```
+- model should stay centered
+- model should rotate in-place
+- tiny dot marks the orbit/pivot center
+- gizmo updates with model orbit
