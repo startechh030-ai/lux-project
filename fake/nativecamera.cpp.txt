@@ -86,6 +86,50 @@ struct Mat4 {
         result.m[12] = result.m[13] = result.m[15] = 0;
         return result;
     }
+
+    // Get view matrix inverse (camera transform)
+    Vec3 getPosition() const {
+        // For lookAt matrix, extract position
+        Vec3 s(m[0], m[4], m[8]);
+        Vec3 u(m[1], m[5], m[9]);
+        Vec3 f(-m[2], -m[6], -m[10]);
+        float tx = m[12], ty = m[13], tz = m[14];
+        return s * (-tx) + u * (-ty) + f * tz; // simplified
+    }
+};
+
+struct Quat {
+    float x, y, z, w;
+    Quat() : x(0), y(0), z(0), w(1) {}
+    Quat(float x_, float y_, float z_, float w_) : x(x_), y(y_), z(z_), w(w_) {}
+
+    static Quat fromAxisAngle(const Vec3& axis, float angle) {
+        float half = angle * 0.5f;
+        float s = std::sin(half);
+        return Quat(axis.x * s, axis.y * s, axis.z * s, std::cos(half));
+    }
+
+    Quat operator*(const Quat& o) const {
+        return Quat(
+            w*o.x + x*o.w + y*o.z - z*o.y,
+            w*o.y - x*o.z + y*o.w + z*o.x,
+            w*o.z + x*o.y - y*o.x + z*o.w,
+            w*o.w - x*o.x - y*o.y - z*o.z
+        );
+    }
+
+    Quat normalized() const {
+        float len = std::sqrt(x*x + y*y + z*z + w*w);
+        if (len < 1e-6f) return Quat(0, 0, 0, 1);
+        return Quat(x/len, y/len, z/len, w/len);
+    }
+
+    Vec3 rotate(const Vec3& v) const {
+        Quat qv(v.x, v.y, v.z, 0);
+        Quat conj(-x, -y, -z, w);
+        Quat res = *this * qv * conj;
+        return Vec3(res.x, res.y, res.z);
+    }
 };
 
 // ============================================================================
@@ -126,11 +170,13 @@ struct AABB {
 
 class OrbitCamera {
 public:
+    // Target = what we're looking at (pivot point)
     Vec3 target = Vec3(0, 0, 0);
 
-    float yaw = 0.0f;
-    float pitch = 0.3f;
-    float distance = 5.0f;
+    // Spherical coordinates around target
+    float yaw = 0.0f;       // horizontal rotation (radians)
+    float pitch = 0.3f;     // vertical rotation (radians) - slight down angle
+    float distance = 5.0f;  // distance from target
 
     // Damping / smoothing
     Vec3 smoothTarget;
@@ -139,14 +185,14 @@ public:
     float smoothDistance = 5.0f;
 
     // Config
-    float damping = 0.12f;
-    float orbitSpeed = 0.008f;
-    float zoomSpeed = 0.01f;
-    float panSpeed = 0.003f;
-    float minDistance = 0.05f;
+    float damping = 0.15f;           // 0=instant, 1=no movement
+    float orbitSpeed = 0.008f;       // radians per pixel
+    float zoomSpeed = 0.01f;         // distance multiplier per pixel
+    float panSpeed = 0.003f;         // world units per pixel
+    float minDistance = 0.1f;
     float maxDistance = 1000.0f;
-    float minPitch = -1.55f;
-    float maxPitch = 1.55f;
+    float minPitch = -1.55f;         // almost straight down
+    float maxPitch = 1.55f;          // almost straight up
 
     // Viewport
     int screenWidth = 1080;
@@ -155,18 +201,18 @@ public:
     float nearPlane = 0.1f;
     float farPlane = 1000.0f;
 
-    // Mesh bounds
+    // Mesh bounds for auto-focus
     AABB meshBounds;
     bool hasBounds = false;
 
-    // Focus transition
+    // Focus mode (animated transition)
     bool inFocusTransition = false;
     Vec3 focusStartTarget, focusEndTarget;
     float focusStartDist, focusEndDist;
     float focusStartYaw, focusEndYaw;
     float focusStartPitch, focusEndPitch;
     float focusProgress = 0.0f;
-    float focusSpeed = 2.5f;
+    float focusSpeed = 2.0f; // seconds
 
     // Touch state
     bool isOrbiting = false;
@@ -174,9 +220,6 @@ public:
     bool isZooming = false;
     float lastTouchX = 0, lastTouchY = 0;
     float pinchStartDist = 0;
-    float pinchStartDistance = 0; // camera distance at pinch start
-    Vec2 panStartCenter; // screen center at pan start
-    Vec3 panStartTarget; // target at pan start
 
     OrbitCamera() {
         smoothTarget = target;
@@ -185,7 +228,12 @@ public:
         smoothDistance = distance;
     }
 
+    // ------------------------------------------------------------------------
+    // CORE: Get camera position from spherical coords
+    // ------------------------------------------------------------------------
     Vec3 getCameraPosition(float y, float p, float d, const Vec3& tgt) const {
+        // Spherical to Cartesian (Y-up)
+        // yaw=0, pitch=0 -> looking along -Z (standard OpenGL/Filament)
         float cosP = std::cos(p);
         float x = d * std::sin(y) * cosP;
         float y_ = d * std::sin(p);
@@ -212,9 +260,10 @@ public:
     }
 
     // ------------------------------------------------------------------------
-    // UPDATE
+    // UPDATE: Call every frame
     // ------------------------------------------------------------------------
     void update(float dt) {
+        // Handle focus transition animation
         if (inFocusTransition) {
             focusProgress += dt * focusSpeed;
             if (focusProgress >= 1.0f) {
@@ -223,18 +272,19 @@ public:
             }
             float t = easeOutCubic(focusProgress);
             target = lerp(focusStartTarget, focusEndTarget, t);
-            yaw = lerpAngle(focusStartYaw, focusEndYaw, t);
+            yaw = lerp(focusStartYaw, focusEndYaw, t);
             pitch = lerp(focusStartPitch, focusEndPitch, t);
             distance = lerp(focusStartDist, focusEndDist, t);
         }
 
-        // Smooth damping
+        // Smooth damping toward target values
         float lerpFactor = 1.0f - std::pow(1.0f - damping, dt * 60.0f);
         smoothTarget = lerp(smoothTarget, target, lerpFactor);
         smoothYaw = lerpAngle(smoothYaw, yaw, lerpFactor);
         smoothPitch = lerp(smoothPitch, pitch, lerpFactor);
         smoothDistance = lerp(smoothDistance, distance, lerpFactor);
 
+        // Clamp pitch
         pitch = std::clamp(pitch, minPitch, maxPitch);
         smoothPitch = std::clamp(smoothPitch, minPitch, maxPitch);
     }
@@ -249,12 +299,10 @@ public:
             isOrbiting = true;
             isPanning = false;
             isZooming = false;
-        } else if (pointerCount >= 2) {
+        } else if (pointerCount == 2) {
             isOrbiting = false;
             isPanning = true;
             isZooming = false;
-            panStartCenter = Vec2(x, y);
-            panStartTarget = target;
         }
     }
 
@@ -263,14 +311,12 @@ public:
         float dy = y - lastTouchY;
 
         if (isOrbiting && pointerCount == 1) {
-            // FIXED: Natural orbit - drag right rotates yaw left (like dragging the world)
-            // In Nomad: dragging right makes the model appear to rotate left, which means
-            // camera moves right around the target = yaw decreases
+            // Orbit: rotate around target
             yaw -= dx * orbitSpeed;
-            pitch += dy * orbitSpeed; // FIXED: drag up = look down (pitch increases)
+            pitch -= dy * orbitSpeed; // Inverted Y for natural feel
             pitch = std::clamp(pitch, minPitch, maxPitch);
         }
-        else if (isPanning && pointerCount >= 2) {
+        else if (isPanning && pointerCount == 2) {
             // Pan: move target in camera plane
             Vec3 right = getRight();
             Vec3 up = getUp();
@@ -290,17 +336,16 @@ public:
 
     void onPinchStart(float dist) {
         pinchStartDist = dist;
-        pinchStartDistance = distance;
         isZooming = true;
         isOrbiting = false;
     }
 
     void onPinch(float currentDist) {
-        if (!isZooming || pinchStartDist < 1.0f) return;
-        float ratio = pinchStartDist / currentDist;
-        float newDist = pinchStartDistance * ratio;
-        newDist = std::clamp(newDist, minDistance, maxDistance);
-        distance = newDist;
+        if (!isZooming) return;
+        float scale = pinchStartDist / currentDist; // pinch in = zoom in
+        distance *= scale;
+        distance = std::clamp(distance, minDistance, maxDistance);
+        pinchStartDist = currentDist;
     }
 
     void onPinchEnd() {
@@ -309,6 +354,14 @@ public:
 
     void onDoubleTap() {
         focusOnBounds();
+    }
+
+    // ------------------------------------------------------------------------
+    // ZOOM (scroll wheel / buttons)
+    // ------------------------------------------------------------------------
+    void zoom(float amount) {
+        distance *= (1.0f + amount * zoomSpeed);
+        distance = std::clamp(distance, minDistance, maxDistance);
     }
 
     // ------------------------------------------------------------------------
@@ -321,11 +374,15 @@ public:
 
     void focusOnBounds() {
         if (!hasBounds) return;
+
         Vec3 center = meshBounds.center();
         float radius = meshBounds.radius();
+
+        // Calculate distance to fit bounding sphere in view
         float dist = radius / std::sin(fovY * 0.5f);
-        dist *= 1.3f;
-        startFocusTransition(center, dist, yaw, 0.2f);
+        dist *= 1.2f; // slight padding
+
+        startFocusTransition(center, dist, yaw, 0.3f);
     }
 
     void focusOnPoint(const Vec3& point, float desiredDistance) {
@@ -345,16 +402,20 @@ public:
         inFocusTransition = true;
     }
 
+    // ------------------------------------------------------------------------
+    // RESET
+    // ------------------------------------------------------------------------
     void reset() {
         target = hasBounds ? meshBounds.center() : Vec3(0, 0, 0);
         yaw = 0.0f;
-        pitch = 0.2f;
+        pitch = 0.3f;
         if (hasBounds) {
             float radius = meshBounds.radius();
             distance = radius / std::sin(fovY * 0.5f) * 1.5f;
         } else {
             distance = 5.0f;
         }
+        // Snap smooth values immediately
         smoothTarget = target;
         smoothYaw = yaw;
         smoothPitch = pitch;
@@ -364,10 +425,13 @@ public:
     // ------------------------------------------------------------------------
     // RAYCASTING
     // ------------------------------------------------------------------------
+    // screenX, screenY in pixels (0,0 = top-left)
     Vec3 screenToWorldRay(float screenX, float screenY) const {
+        // Normalize to -1..1
         float nx = (2.0f * screenX / screenWidth) - 1.0f;
-        float ny = 1.0f - (2.0f * screenY / screenHeight);
+        float ny = 1.0f - (2.0f * screenY / screenHeight); // flip Y
 
+        // Unproject near/far points
         Vec3 pos = getCameraPosition();
         Vec3 forward = getForward();
         Vec3 right = getRight();
@@ -403,6 +467,7 @@ public:
         Vec3 center = smoothTarget;
         Vec3 up(0, 1, 0);
 
+        // Handle gimbal lock when looking straight up/down
         if (std::abs(smoothPitch) > 1.5f) {
             up = getUp();
         }
@@ -433,6 +498,9 @@ public:
     float getDistance() const { return smoothDistance; }
 
 private:
+    // ------------------------------------------------------------------------
+    // MATH HELPERS
+    // ------------------------------------------------------------------------
     static float lerp(float a, float b, float t) {
         return a + (b - a) * t;
     }
@@ -604,7 +672,7 @@ Java_luxe_texture3d_app_Camera_nativeRaycastScreen(JNIEnv* env, jobject, jfloat 
 }
 
 // ------------------------------------------------------------------------
-// MATRIX OUTPUT
+// MATRIX OUTPUT (call these after update() to get current camera)
 // ------------------------------------------------------------------------
 JNIEXPORT void JNICALL
 Java_luxe_texture3d_app_Camera_nativeGetViewMatrix(JNIEnv* env, jobject, jfloatArray outMatrix) {

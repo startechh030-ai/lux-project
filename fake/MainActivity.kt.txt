@@ -32,8 +32,10 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
     private lateinit var engine: Engine
     private lateinit var modelViewer: ModelViewer
     private lateinit var statusText: TextView
-    private lateinit var camera: Camera
+    private lateinit var pivotAxisView: PivotAxisView
+    private lateinit var touchHandler: NativeModelTouchHandler
     private var lastFrameTimeNanos: Long = 0L
+    private var baseModelTransform: FloatArray? = null
 
     private val pickGlb = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
@@ -44,9 +46,10 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Utils.init()
+        NativeModel.nativeReset()
+        touchHandler = NativeModelTouchHandler(this)
         buildUi()
         setupFilament()
-        setupCamera()
     }
 
     private fun buildUi() {
@@ -62,15 +65,22 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
         }
         root.addView(chromeView, FrameLayout.LayoutParams(-1, -1))
 
-        // Gesture layer — ALL touch goes to orbit camera now
+        // Dedicated transparent gesture layer. This is more reliable than attaching
+        // touch directly to SurfaceView when Android overlays are above it.
         val gestureLayer = View(this).apply {
             setBackgroundColor(Color.TRANSPARENT)
             setOnTouchListener { _, event ->
-                camera.onTouch(this, event)
+                touchHandler.onTouch(this, event)
                 true
             }
         }
         root.addView(gestureLayer, FrameLayout.LayoutParams(-1, -1))
+
+        pivotAxisView = PivotAxisView(this).apply {
+            isClickable = false
+            isFocusable = false
+        }
+        root.addView(pivotAxisView, FrameLayout.LayoutParams(-1, -1))
 
         val pickButton = ImageButton(this).apply {
             setImageResource(android.R.drawable.ic_menu_upload)
@@ -106,7 +116,7 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
             .color(0.075f, 0.083f, 0.105f, 1.0f)
             .build(engine)
 
-        // Soft main light
+        // Soft main light so imported GLBs do not appear flat/dark.
         val sun = EntityManager.get().create()
         LightManager.Builder(LightManager.Type.SUN)
             .color(1.0f, 0.96f, 0.88f)
@@ -115,13 +125,6 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
             .castShadows(true)
             .build(engine, sun)
         modelViewer.scene.addEntity(sun)
-    }
-
-    private fun setupCamera() {
-        camera = Camera(this)
-        camera.setViewport(surfaceView.width, surfaceView.height)
-        camera.setFov(45f)
-        camera.setDamping(0.12f) // Nomad-like smooth feel
     }
 
     override fun onResume() {
@@ -135,7 +138,6 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
     }
 
     override fun onDestroy() {
-        camera.destroy()
         super.onDestroy()
     }
 
@@ -146,53 +148,41 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
             lastFrameTimeNanos = frameTimeNanos
 
             val aspect = surfaceView.width.toDouble() / surfaceView.height.toDouble()
-
-            // Update orbit camera
-            camera.setViewport(surfaceView.width, surfaceView.height)
-            camera.update(delta)
-
-            // Apply camera to Filament
-            val viewMat = camera.getViewMatrix()
-            val projMat = camera.getProjectionMatrix()
-            modelViewer.camera.setCustomProjection(
-                projMat.toDoubleArray(),
-                0.03,
-                1000.0
-            )
-            modelViewer.camera.modelMatrix = viewMat.toDoubleArray().invertViewToModel()
-
+            NativeModel.nativeSetViewport(surfaceView.width, surfaceView.height)
+            NativeModel.nativeUpdate(delta)
+            applyStableCamera(aspect)
+            applyNativeModelTransform()
+            updatePivotAxis()
             modelViewer.render(frameTimeNanos)
         }
         Choreographer.getInstance().postFrameCallback(this)
     }
 
-    // Helper: convert view matrix to camera model matrix (inverse)
-    private fun DoubleArray.invertViewToModel(): DoubleArray {
-        // For a lookAt view matrix, the camera model matrix is the inverse
-        // We can extract position from the view matrix and rebuild
-        val m = this
-        // Right, Up, Forward vectors from view matrix
-        val rx = m[0]; val ry = m[4]; val rz = m[8]
-        val ux = m[1]; val uy = m[5]; val uz = m[9]
-        val fx = -m[2]; val fy = -m[6]; val fz = -m[10]
-        val tx = m[12]; val ty = m[13]; val tz = m[14]
-
-        // eye = -(R^T * t)
-        val ex = -(rx * tx + ry * ty + rz * tz)
-        val ey = -(ux * tx + uy * ty + uz * tz)
-        val ez = -(fx * tx + fy * ty + fz * tz)
-
-        // Build model matrix (column-major)
-        return doubleArrayOf(
-            rx, ux, -fx, 0.0,
-            ry, uy, -fy, 0.0,
-            rz, uz, -fz, 0.0,
-            ex, ey, ez, 1.0
+    private fun applyStableCamera(aspect: Double) {
+        // Static close camera. Movement is model-only and calculated in C++.
+        modelViewer.camera.setProjection(38.0, aspect, 0.03, 1000.0, com.google.android.filament.Camera.Fov.VERTICAL)
+        modelViewer.camera.lookAt(
+            0.0, 0.0, 2.0,
+            0.0, 0.0, 0.0,
+            0.0, 1.0, 0.0
         )
     }
 
-    private fun FloatArray.toDoubleArray(): DoubleArray {
-        return DoubleArray(size) { this[it].toDouble() }
+    private fun applyNativeModelTransform() {
+        val asset = modelViewer.asset ?: return
+        val base = baseModelTransform ?: return
+        val tm = engine.transformManager
+        val instance = tm.getInstance(asset.root)
+        val finalTransform = NativeModelTransform.multiplyColumnMajor(NativeModel.nativeGetMatrix(), base)
+        tm.setTransform(instance, finalTransform)
+    }
+
+    private fun updatePivotAxis() {
+        if (::pivotAxisView.isInitialized) {
+            val offset = NativeModel.nativeGetPivotScreenOffset()
+            pivotAxisView.offsetXFromCenter = offset[0]
+            pivotAxisView.offsetYFromCenter = offset[1]
+        }
     }
 
     private fun openFilePicker() {
@@ -221,20 +211,26 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
             modelViewer.destroyModel()
             modelViewer.loadModelGlb(buffer)
             modelViewer.transformToUnitCube()
+            captureBaseModelTransform()
+            NativeModel.nativeReset()
+            lastFrameTimeNanos = 0L
 
-            // Set mesh bounds and auto-focus camera
-            val bbox = modelViewer.asset?.boundingBox
-            if (bbox != null) {
-                val min = bbox.center.let { c -> c.minus(bbox.halfExtent) }
-                val max = bbox.center.let { c -> c.plus(bbox.halfExtent) }
-                camera.setMeshBounds(min.x, min.y, min.z, max.x, max.y, max.z)
-                camera.focusOnBounds()
-            }
-
-            statusText.text = "Loaded: $name | orbit to rotate, pinch to zoom, 2-finger drag to pan"
+            statusText.text = "Loaded: $name | drag to move model from pivot, double tap empty screen to reset"
         }.onFailure { error ->
             statusText.text = "Failed to load GLB"
             Toast.makeText(this, error.message ?: "Unknown error", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun captureBaseModelTransform() {
+        val asset = modelViewer.asset ?: run {
+            baseModelTransform = null
+            return
+        }
+        val tm = engine.transformManager
+        val instance = tm.getInstance(asset.root)
+        baseModelTransform = FloatArray(16).also { base ->
+            tm.getTransform(instance, base)
         }
     }
 
