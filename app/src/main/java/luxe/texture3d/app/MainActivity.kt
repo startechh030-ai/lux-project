@@ -32,8 +32,8 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
     private lateinit var engine: Engine
     private lateinit var modelViewer: ModelViewer
     private lateinit var statusText: TextView
-    private lateinit var axisGizmo: AxisGizmo
-    private val modelOrbit = ModelOrbitController()
+    private lateinit var pivotAxisView: PivotAxisView
+    private lateinit var touchHandler: NativeModelTouchHandler
     private var lastFrameTimeNanos: Long = 0L
     private var baseModelTransform: FloatArray? = null
 
@@ -46,6 +46,8 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Utils.init()
+        NativeModel.nativeReset()
+        touchHandler = NativeModelTouchHandler(this)
         buildUi()
         setupFilament()
     }
@@ -68,18 +70,17 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
         val gestureLayer = View(this).apply {
             setBackgroundColor(Color.TRANSPARENT)
             setOnTouchListener { _, event ->
-                modelOrbit.onTouch(event)
+                touchHandler.onTouch(this, event)
                 true
             }
         }
         root.addView(gestureLayer, FrameLayout.LayoutParams(-1, -1))
 
-        val pivotDot = PivotDotView(this).apply {
+        pivotAxisView = PivotAxisView(this).apply {
             isClickable = false
             isFocusable = false
         }
-        val dotSize = (24 * resources.displayMetrics.density).toInt()
-        root.addView(pivotDot, FrameLayout.LayoutParams(dotSize, dotSize, Gravity.CENTER))
+        root.addView(pivotAxisView, FrameLayout.LayoutParams(-1, -1))
 
         val pickButton = ImageButton(this).apply {
             setImageResource(android.R.drawable.ic_menu_upload)
@@ -95,14 +96,6 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
             leftMargin = (18 * resources.displayMetrics.density).toInt()
         }
         root.addView(pickButton, buttonParams)
-
-        axisGizmo = AxisGizmo(this)
-        val gizmoSize = (118 * resources.displayMetrics.density).toInt()
-        val gizmoParams = FrameLayout.LayoutParams(gizmoSize, gizmoSize, Gravity.TOP or Gravity.END).apply {
-            topMargin = (14 * resources.displayMetrics.density).toInt()
-            rightMargin = (14 * resources.displayMetrics.density).toInt()
-        }
-        root.addView(axisGizmo, gizmoParams)
 
         statusText = TextView(this).apply {
             text = "Tap the icon to pick a .glb file"
@@ -155,36 +148,40 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
             lastFrameTimeNanos = frameTimeNanos
 
             val aspect = surfaceView.width.toDouble() / surfaceView.height.toDouble()
+            NativeModel.nativeSetViewport(surfaceView.width, surfaceView.height)
+            NativeModel.nativeUpdate(delta)
             applyStableCamera(aspect)
-            applyModelOrbitTransform()
-            updateGizmo()
+            applyNativeModelTransform()
+            updatePivotAxis()
             modelViewer.render(frameTimeNanos)
         }
         Choreographer.getInstance().postFrameCallback(this)
     }
 
     private fun applyStableCamera(aspect: Double) {
-        // Camera stays static. Only the model root rotates/scales around the center pivot.
-        modelViewer.camera.setProjection(45.0, aspect, 0.05, 1000.0, com.google.android.filament.Camera.Fov.VERTICAL)
+        // Static close camera. Movement is model-only and calculated in C++.
+        modelViewer.camera.setProjection(38.0, aspect, 0.03, 1000.0, com.google.android.filament.Camera.Fov.VERTICAL)
         modelViewer.camera.lookAt(
-            0.0, 0.0, 3.0,
+            0.0, 0.0, 2.0,
             0.0, 0.0, 0.0,
             0.0, 1.0, 0.0
         )
     }
 
-    private fun applyModelOrbitTransform() {
+    private fun applyNativeModelTransform() {
         val asset = modelViewer.asset ?: return
         val base = baseModelTransform ?: return
         val tm = engine.transformManager
         val instance = tm.getInstance(asset.root)
-        val finalTransform = NativeModelTransform.multiplyColumnMajor(modelOrbit.transformMatrix(), base)
+        val finalTransform = NativeModelTransform.multiplyColumnMajor(NativeModel.nativeGetMatrix(), base)
         tm.setTransform(instance, finalTransform)
     }
 
-    private fun updateGizmo() {
-        if (::axisGizmo.isInitialized) {
-            axisGizmo.setCameraOrientation(modelOrbit.yaw, modelOrbit.pitch)
+    private fun updatePivotAxis() {
+        if (::pivotAxisView.isInitialized) {
+            val offset = NativeModel.nativeGetPivotScreenOffset()
+            pivotAxisView.offsetXFromCenter = offset[0]
+            pivotAxisView.offsetYFromCenter = offset[1]
         }
     }
 
@@ -215,10 +212,10 @@ class MainActivity : ComponentActivity(), Choreographer.FrameCallback {
             modelViewer.loadModelGlb(buffer)
             modelViewer.transformToUnitCube()
             captureBaseModelTransform()
-            modelOrbit.reset()
+            NativeModel.nativeReset()
             lastFrameTimeNanos = 0L
 
-            statusText.text = "Loaded: $name | 1 finger rotate model, pinch zoom. Camera stays fixed."
+            statusText.text = "Loaded: $name | drag to move model from pivot, double tap empty screen to reset"
         }.onFailure { error ->
             statusText.text = "Failed to load GLB"
             Toast.makeText(this, error.message ?: "Unknown error", Toast.LENGTH_LONG).show()
