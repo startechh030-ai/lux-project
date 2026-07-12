@@ -13,6 +13,10 @@
     ".kts": {
       "enabled": true,
       "run": "kotlin-language-server"
+    },
+    ".kt": {
+      "enabled": false,
+      "run": "kotlin-language-server"
     }
   }
 }
