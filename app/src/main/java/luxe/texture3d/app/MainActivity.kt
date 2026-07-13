@@ -17,6 +17,8 @@ import android.widget.ImageButton
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import com.google.android.filament.Skybox
+import com.google.android.filament.utils.Float3
 import com.google.android.filament.utils.KTX1Loader
 import com.google.android.filament.utils.ModelViewer
 import com.google.android.filament.utils.Utils
@@ -28,6 +30,7 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
     private lateinit var viewer: ModelViewer
     private lateinit var status: TextView
     private val nativeCamera = NativeCamera()
+    private var solidSkybox: Skybox? = null
     private var rendering = false
 
     private val openModel = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -39,8 +42,7 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
         Utils.init()
         window.statusBarColor = 0xff0f172a.toInt()
         window.navigationBarColor = 0xff0f172a.toInt()
-        // FLAG_FULLSCREEN is reliable on API 26+ and avoids a vendor-specific
-        // WindowInsetsController crash seen on some Android devices.
+        // This legacy fullscreen flag is reliable across our API 26+ device range.
         window.setFlags(
             WindowManager.LayoutParams.FLAG_FULLSCREEN,
             WindowManager.LayoutParams.FLAG_FULLSCREEN
@@ -89,11 +91,12 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
             viewer.indirectLightCubemap = bundle.cubemap
             bundle.indirectLight?.intensity = 30_000f
         }
-        val sky = readAsset("environments/shanghai_bund_2k_skybox.ktx")
-        KTX1Loader.createSkybox(viewer.engine, sky).also { bundle ->
-            viewer.scene.skybox = bundle.skybox
-            viewer.skyboxCubemap = bundle.cubemap
-        }
+        // Keep the HDR only as invisible image-based lighting. The visible
+        // background is a neutral Blender-like gray and does not light models.
+        solidSkybox = Skybox.Builder()
+            .color(0.055f, 0.065f, 0.075f, 1.0f)
+            .build(viewer.engine)
+        viewer.scene.skybox = solidSkybox
     }
 
     private fun readAsset(path: String): ByteBuffer {
@@ -112,7 +115,9 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
             val buffer = ByteBuffer.allocateDirect(bytes.size).order(ByteOrder.nativeOrder()).apply { put(bytes); flip() }
             viewer.loadModelGlb(buffer)
             if (viewer.asset == null) throw IllegalArgumentException("Filament could not parse this GLB")
-            viewer.transformToUnitCube()
+            // Camera math orbits the world origin, so normalize the model to
+            // that same pivot instead of ModelViewer's default z = -4 center.
+            viewer.transformToUnitCube(Float3(0f, 0f, 0f))
             nativeCamera.nativeReset()
             status.text = "$name  •  ORBIT VIEW"
         } catch (e: Exception) {
@@ -141,7 +146,12 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
             }
         })
         var lastX = 0f; var lastY = 0f; var lastCount = 0
-        surface.setOnTouchListener { _, event ->
+        surface.isClickable = true
+        surface.isFocusable = true
+        surface.setOnTouchListener { view, event ->
+            if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                view.parent?.requestDisallowInterceptTouchEvent(true)
+            }
             scale.onTouchEvent(event); taps.onTouchEvent(event)
             val count = event.pointerCount
             val cx = (0 until count).sumOf { event.getX(it).toDouble() }.toFloat() / count

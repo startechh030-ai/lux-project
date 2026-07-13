@@ -5,7 +5,7 @@ Android GLB viewer for **Android 8.0 through Android 16** (`minSdk 26`, `targetS
 ## Included
 
 - Filament GLB rendering and PBR materials
-- Shanghai Bund 2K HDR preprocessed into Filament IBL and skybox KTX assets
+- Shanghai Bund 2K HDR preprocessed into Filament IBL KTX asset with a neutral solid editor background
 - C++17/JNI camera math with frame-rate-independent exponential smoothing
 - One-finger orbit, pinch zoom, two-finger pan, double-tap reset
 - Android system file picker; no storage permission required
@@ -38,4 +38,3 @@ Kotlin owns Android lifecycle, UI, file selection, gesture recognition, and Fila
 The supplied `shanghai_bund_2k.hdr.txt` was verified as Radiance HDR data, renamed to `.hdr`, and converted offline with Filament `cmgen` 1.69.4. Runtime assets are:
 
 - `app/src/main/assets/environments/shanghai_bund_2k_ibl.ktx`
-- `app/src/main/assets/environments/shanghai_bund_2k_skybox.ktx`
