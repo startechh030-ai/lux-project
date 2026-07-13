@@ -5,11 +5,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
 import android.view.Choreographer
-import android.view.GestureDetector
 import android.view.Gravity
-import android.view.MotionEvent
-import android.view.ScaleGestureDetector
-import android.view.SurfaceView
 import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
@@ -26,7 +22,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
-    private lateinit var surface: SurfaceView
+    private lateinit var surface: CameraSurfaceView
     private lateinit var viewer: ModelViewer
     private lateinit var status: TextView
     private val nativeCamera = NativeCamera()
@@ -40,8 +36,8 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Utils.init()
-        window.statusBarColor = 0xff0f172a.toInt()
-        window.navigationBarColor = 0xff0f172a.toInt()
+        window.statusBarColor = android.graphics.Color.TRANSPARENT
+        window.navigationBarColor = android.graphics.Color.TRANSPARENT
         // This legacy fullscreen flag is reliable across our API 26+ device range.
         window.setFlags(
             WindowManager.LayoutParams.FLAG_FULLSCREEN,
@@ -49,7 +45,10 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
         )
 
         val root = FrameLayout(this).apply { setBackgroundColor(0xff0f172a.toInt()) }
-        surface = SurfaceView(this).apply { setZOrderOnTop(false) }
+        surface = CameraSurfaceView(this).apply {
+            cameraController = nativeCamera
+            setZOrderOnTop(false)
+        }
         root.addView(surface, FrameLayout.LayoutParams(-1, -1))
 
         val open = ImageButton(this).apply {
@@ -74,10 +73,10 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
             bottomMargin = dp(12)
         })
         setContentView(root)
+        applyImmersiveMode()
 
         viewer = ModelViewer(surface, manipulator = null)
         loadEnvironment()
-        installTouchController()
         surface.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
             nativeCamera.nativeSetViewport(surface.width.coerceAtLeast(1), surface.height.coerceAtLeast(1))
         }
@@ -133,45 +132,30 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
         return uri.lastPathSegment ?: "model.glb"
     }
 
-    private fun installTouchController() {
-        val scale = ScaleGestureDetector(this, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
-            override fun onScale(detector: ScaleGestureDetector): Boolean {
-                nativeCamera.nativeZoom(detector.scaleFactor); return true
+
+    @Suppress("DEPRECATION")
+    private fun applyImmersiveMode() {
+        window.decorView.systemUiVisibility =
+            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
+            View.SYSTEM_UI_FLAG_FULLSCREEN or
+            View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+            View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
+            View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
+            View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+        if (android.os.Build.VERSION.SDK_INT >= 28) {
+            window.attributes = window.attributes.apply {
+                layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
             }
-        })
-        val taps = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
-            override fun onDown(e: MotionEvent) = true
-            override fun onDoubleTap(e: MotionEvent): Boolean {
-                nativeCamera.nativeReset(); status.text = "CAMERA RESET"; return true
-            }
-        })
-        var lastX = 0f; var lastY = 0f; var lastCount = 0
-        surface.isClickable = true
-        surface.isFocusable = true
-        surface.setOnTouchListener { view, event ->
-            if (event.actionMasked == MotionEvent.ACTION_DOWN) {
-                view.parent?.requestDisallowInterceptTouchEvent(true)
-            }
-            scale.onTouchEvent(event); taps.onTouchEvent(event)
-            val count = event.pointerCount
-            val cx = (0 until count).sumOf { event.getX(it).toDouble() }.toFloat() / count
-            val cy = (0 until count).sumOf { event.getY(it).toDouble() }.toFloat() / count
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> { lastX = cx; lastY = cy; lastCount = count }
-                MotionEvent.ACTION_MOVE -> {
-                    if (!scale.isInProgress && count == lastCount) {
-                        if (count == 1) nativeCamera.nativeOrbit(cx-lastX, cy-lastY)
-                        else if (count >= 2) nativeCamera.nativePan(cx-lastX, cy-lastY)
-                    }
-                    lastX = cx; lastY = cy; lastCount = count
-                }
-                MotionEvent.ACTION_POINTER_UP -> { lastCount = -1 }
-            }
-            true
         }
     }
 
-    override fun onResume() { super.onResume(); rendering = true; Choreographer.getInstance().postFrameCallback(this) }
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) applyImmersiveMode()
+    }
+
+    override fun onResume() { super.onResume(); applyImmersiveMode(); rendering = true; Choreographer.getInstance().postFrameCallback(this) }
     override fun onPause() { rendering = false; Choreographer.getInstance().removeFrameCallback(this); super.onPause() }
     override fun doFrame(frameTimeNanos: Long) {
         if (!rendering) return

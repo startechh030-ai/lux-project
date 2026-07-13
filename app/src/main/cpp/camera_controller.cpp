@@ -8,7 +8,8 @@ namespace {
 struct CameraController {
     float yaw = 0.0f, pitch = 0.12f, distance = 3.2f;
     float targetYaw = 0.0f, targetPitch = 0.12f, targetDistance = 3.2f;
-    float panX = 0.0f, panY = 0.0f, targetPanX = 0.0f, targetPanY = 0.0f;
+    float panX = 0.0f, panY = 0.0f, panZ = 0.0f;
+    float targetPanX = 0.0f, targetPanY = 0.0f, targetPanZ = 0.0f;
     float width = 1.0f, height = 1.0f;
     double lastTime = 0.0;
     std::mutex mutex;
@@ -16,7 +17,7 @@ struct CameraController {
     void reset() {
         yaw = targetYaw = 0.0f; pitch = targetPitch = 0.12f;
         distance = targetDistance = 3.2f;
-        panX = targetPanX = panY = targetPanY = 0.0f;
+        panX = targetPanX = panY = targetPanY = panZ = targetPanZ = 0.0f;
     }
     void orbit(float dx, float dy) {
         targetYaw -= dx / std::max(width, 1.0f) * 4.2f;
@@ -27,10 +28,20 @@ struct CameraController {
             targetDistance = std::clamp(targetDistance / scale, 1.15f, 12.0f);
     }
     void pan(float dx, float dy) {
-        const float units = targetDistance * 1.45f / std::max(height, 1.0f);
-        targetPanX -= dx * units; targetPanY += dy * units;
+        // Translate the orbit target in the camera's screen plane. This keeps
+        // panning intuitive after the view has been rotated (Nomad/Blender style).
+        const float units = targetDistance * 1.55f / std::max(height, 1.0f);
+        const float sy = std::sin(targetYaw), cy = std::cos(targetYaw);
+        const float sp = std::sin(targetPitch), cp = std::cos(targetPitch);
+        const float rightX = cy, rightY = 0.0f, rightZ = -sy;
+        const float upX = -sp * sy, upY = cp, upZ = -sp * cy;
+
+        targetPanX += (-dx * rightX + dy * upX) * units;
+        targetPanY += (-dx * rightY + dy * upY) * units;
+        targetPanZ += (-dx * rightZ + dy * upZ) * units;
         targetPanX = std::clamp(targetPanX, -4.0f, 4.0f);
         targetPanY = std::clamp(targetPanY, -4.0f, 4.0f);
+        targetPanZ = std::clamp(targetPanZ, -4.0f, 4.0f);
     }
     void update(double now) {
         float dt = lastTime == 0.0 ? 1.0f / 60.0f : (float)std::clamp(now-lastTime, 0.0, 0.05);
@@ -39,10 +50,11 @@ struct CameraController {
         yaw += (targetYaw-yaw)*a; pitch += (targetPitch-pitch)*a;
         distance += (targetDistance-distance)*a;
         panX += (targetPanX-panX)*a; panY += (targetPanY-panY)*a;
+        panZ += (targetPanZ-panZ)*a;
     }
     std::array<float, 6> pose() const {
         const float cp=std::cos(pitch), sp=std::sin(pitch), sy=std::sin(yaw), cy=std::cos(yaw);
-        float tx=panX, ty=panY, tz=0.0f;
+        float tx=panX, ty=panY, tz=panZ;
         return {tx + distance*cp*sy, ty + distance*sp, tz + distance*cp*cy, tx, ty, tz};
     }
 } camera;

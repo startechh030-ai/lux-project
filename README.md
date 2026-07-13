@@ -38,3 +38,9 @@ Kotlin owns Android lifecycle, UI, file selection, gesture recognition, and Fila
 The supplied `shanghai_bund_2k.hdr.txt` was verified as Radiance HDR data, renamed to `.hdr`, and converted offline with Filament `cmgen` 1.69.4. Runtime assets are:
 
 - `app/src/main/assets/environments/shanghai_bund_2k_ibl.ktx`
+
+## Camera revision 0.2.0
+
+The camera input pipeline now uses a dedicated `CameraSurfaceView` rather than overlapping Android gesture detectors. Model and native orbit pivots both use world origin. Pan is calculated in the current camera screen plane. See `CAMERA_RESEARCH.md` for comparison and design notes.
+
+The editor uses sticky immersive fullscreen, lays out through the navigation/status-bar regions and display cutout short edges, and restores immersion whenever window focus returns.
