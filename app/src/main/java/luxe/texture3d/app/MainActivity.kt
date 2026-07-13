@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.provider.OpenableColumns
 import android.view.Choreographer
 import android.view.Gravity
+import android.view.SurfaceView
 import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
@@ -22,7 +23,8 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
-    private lateinit var surface: CameraSurfaceView
+    private lateinit var surface: SurfaceView
+    private lateinit var cameraInput: CameraInputView
     private lateinit var viewer: ModelViewer
     private lateinit var status: TextView
     private val nativeCamera = NativeCamera()
@@ -45,11 +47,16 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
         )
 
         val root = FrameLayout(this).apply { setBackgroundColor(0xff0f172a.toInt()) }
-        surface = CameraSurfaceView(this).apply {
-            cameraController = nativeCamera
-            setZOrderOnTop(false)
-        }
+        surface = SurfaceView(this).apply { setZOrderOnTop(false) }
         root.addView(surface, FrameLayout.LayoutParams(-1, -1))
+
+        // A normal transparent View captures input above the hardware-backed
+        // SurfaceView. This avoids device-specific SurfaceView touch failures.
+        cameraInput = CameraInputView(this).apply {
+            cameraController = nativeCamera
+            onGesture = { gesture -> status.text = "CAMERA INPUT  •  $gesture" }
+        }
+        root.addView(cameraInput, FrameLayout.LayoutParams(-1, -1))
 
         val open = ImageButton(this).apply {
             setImageResource(luxe.texture3d.app.R.drawable.ic_open)

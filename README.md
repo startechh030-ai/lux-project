@@ -44,3 +44,7 @@ The supplied `shanghai_bund_2k.hdr.txt` was verified as Radiance HDR data, renam
 The camera input pipeline now uses a dedicated `CameraSurfaceView` rather than overlapping Android gesture detectors. Model and native orbit pivots both use world origin. Pan is calculated in the current camera screen plane. See `CAMERA_RESEARCH.md` for comparison and design notes.
 
 The editor uses sticky immersive fullscreen, lays out through the navigation/status-bar regions and display cutout short edges, and restores immersion whenever window focus returns.
+
+## Camera input hotfix 0.2.1
+
+Filament continues rendering into a `SurfaceView`, but touch is now captured by a separate transparent `CameraInputView` layered above it. During testing the status pill displays `CAMERA INPUT • ORBIT`, `PAN / ZOOM`, or `RESET`, proving that Android delivered the gesture to the native camera pipeline.
