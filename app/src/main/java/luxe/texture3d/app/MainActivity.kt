@@ -11,7 +11,7 @@ import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.SurfaceView
 import android.view.View
-import android.view.WindowInsets
+import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.TextView
@@ -39,11 +39,12 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
         Utils.init()
         window.statusBarColor = 0xff0f172a.toInt()
         window.navigationBarColor = 0xff0f172a.toInt()
-        if (android.os.Build.VERSION.SDK_INT >= 30) {
-            window.insetsController?.hide(WindowInsets.Type.statusBars())
-        } else @Suppress("DEPRECATION") run {
-            window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-        }
+        // FLAG_FULLSCREEN is reliable on API 26+ and avoids a vendor-specific
+        // WindowInsetsController crash seen on some Android devices.
+        window.setFlags(
+            WindowManager.LayoutParams.FLAG_FULLSCREEN,
+            WindowManager.LayoutParams.FLAG_FULLSCREEN
+        )
 
         val root = FrameLayout(this).apply { setBackgroundColor(0xff0f172a.toInt()) }
         surface = SurfaceView(this).apply { setZOrderOnTop(false) }
