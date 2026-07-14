@@ -71,3 +71,13 @@ This is a small first step toward mobile-sculpting navigation without yet adding
 ## Stable pan/zoom intent 0.3.1
 
 Two-finger gestures now pass through a tiny 2dp intent threshold. Separation-dominant motion locks to zoom; midpoint-dominant motion locks to pan. Pan and zoom commands are never sent during the same gesture, eliminating pinch vibration while retaining a much smaller response threshold than Filament's stock detector.
+
+## Nomad-style focus v1 — 0.4.0
+
+- Double-tap a visible detail to smoothly bring that screen location to the viewport center.
+- Filament strafe updates the persistent orbit target, so following orbit and zoom gestures stay focused there.
+- A tiny ice-blue pivot dot appears briefly during orbit, pan, zoom, and focus.
+- Focus animation lasts 220 ms with deceleration and allocates only when double-tap is used.
+- Existing stable orbit, intent-locked pan, and intent-locked zoom behavior is preserved.
+
+This is intentionally a lightweight screen-space focus approximation. Exact triangle hit-point raycasting is deferred to a later painting milestone.

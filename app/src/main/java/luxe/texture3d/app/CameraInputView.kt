@@ -1,8 +1,14 @@
 package luxe.texture3d.app
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ValueAnimator
 import android.content.Context
+import android.graphics.Canvas
+import android.graphics.Paint
 import android.view.MotionEvent
 import android.view.View
+import android.view.animation.DecelerateInterpolator
 import com.google.android.filament.utils.Manipulator
 import kotlin.math.abs
 import kotlin.math.hypot
@@ -25,16 +31,28 @@ class CameraInputView(context: Context) : View(context) {
     private var moved = false
     private var lastTapTime = 0L
     private var reportedGesture = ""
+    private var focusAnimator: ValueAnimator? = null
+    private var pivotVisible = false
 
-    private val tapSlop = 12f * resources.displayMetrics.density
-    private val intentThreshold = 2f * resources.displayMetrics.density
+    private val density = resources.displayMetrics.density
+    private val tapSlop = 12f * density
+    private val intentThreshold = 2f * density
     private val zoomBias = 1.15f
     private val zoomScale = 0.1f
+    private val pivotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xff38bdf8.toInt()
+        style = Paint.Style.FILL
+    }
+    private val hidePivot = Runnable {
+        pivotVisible = false
+        invalidate()
+    }
 
     init {
         isClickable = true
         isFocusable = true
         setBackgroundColor(android.graphics.Color.TRANSPARENT)
+        setWillNotDraw(false)
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -43,6 +61,8 @@ class CameraInputView(context: Context) : View(context) {
 
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                focusAnimator?.cancel()
+                focusAnimator = null
                 downX = event.x
                 downY = event.y
                 moved = false
@@ -99,7 +119,8 @@ class CameraInputView(context: Context) : View(context) {
                 if (!moved) {
                     val now = event.eventTime
                     if (now - lastTapTime in 1..350) {
-                        report("DOUBLE TAP")
+                        report("FOCUS")
+                        focusAt(event.x, event.y)
                         lastTapTime = 0L
                     } else lastTapTime = now
                     performClick()
@@ -162,6 +183,53 @@ class CameraInputView(context: Context) : View(context) {
         }
     }
 
+    /**
+     * Nomad-style focus v1: smoothly drag the tapped screen location to the
+     * viewport center in Filament's strafe mode. The manipulator preserves the
+     * resulting orbit target for later orbit and zoom gestures.
+     */
+    private fun focusAt(tapX: Float, tapY: Float) {
+        if (width <= 0 || height <= 0) return
+        focusAnimator?.cancel()
+
+        val centerX = width * 0.5f
+        val centerY = height * 0.5f
+        manipulator.grabBegin(tapX.toInt(), filamentY(tapY), true)
+        revealPivot(1_200L)
+
+        focusAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 220L
+            interpolator = DecelerateInterpolator()
+            addUpdateListener { animation ->
+                val t = animation.animatedValue as Float
+                val x = tapX + (centerX - tapX) * t
+                val y = tapY + (centerY - tapY) * t
+                manipulator.grabUpdate(x.toInt(), filamentY(y))
+            }
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    manipulator.grabEnd()
+                    if (focusAnimator === animation) focusAnimator = null
+                }
+            })
+            start()
+        }
+    }
+
+    private fun revealPivot(durationMs: Long = 700L) {
+        pivotVisible = true
+        removeCallbacks(hidePivot)
+        postDelayed(hidePivot, durationMs)
+        invalidate()
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        if (pivotVisible) {
+            canvas.drawCircle(width * 0.5f, height * 0.5f, 2.2f * density, pivotPaint)
+        }
+    }
+
     override fun performClick(): Boolean {
         super.performClick()
         return true
@@ -178,6 +246,7 @@ class CameraInputView(context: Context) : View(context) {
     private fun report(name: String) {
         if (reportedGesture != name) {
             reportedGesture = name
+            if (name == "ORBIT" || name == "PAN" || name == "ZOOM") revealPivot()
             onGesture?.invoke(name)
         }
     }
