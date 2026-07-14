@@ -38,20 +38,15 @@ Reference:
 
 ## Filament comparison
 
-Filament's `ModelViewer` can create its own `Manipulator`, but Luxe Texture3D intentionally passes `manipulator = null`. This prevents two camera systems from fighting each other. Filament remains responsible for projection and rendering; the native C++ controller owns orbit target, yaw, pitch, distance, pan, clamping, and damping.
+Filament's `ModelViewer.render()` always applies the pose from its `Manipulator` immediately before drawing. Our earlier build passed a separate C++ pose to `viewer.camera.lookAt()`, but `render()` then replaced it, making every gesture appear static. The stable viewer milestone therefore uses ModelViewer's Filament-native `Manipulator` as the single camera owner. Our separate C++ controller remains in the project for a later advanced camera implementation, but it is deliberately not connected while the basic viewer is being validated.
 
 The earlier implementation mixed Android gesture detectors and had a pivot mismatch: Filament normalized the model to a default point around z = -4 while C++ orbited the world origin. The revised implementation:
 
-1. normalizes the model to `(0, 0, 0)`;
-2. uses a dedicated `CameraSurfaceView` that directly owns touch events;
-3. tracks pointer count, centroid, and two-pointer span itself;
-4. sends one-finger deltas to native orbit;
-5. sends simultaneous two-finger centroid and span changes to native pan and zoom;
-6. discards deltas whenever pointer indices change;
-7. pans in the camera's screen plane rather than fixed world X/Y;
-8. clamps pitch and distance;
-9. applies frame-rate-independent exponential smoothing each rendered frame;
-10. resets on double tap.
+1. uses ModelViewer's expected normalized placement at `(0, 0, -4)`;
+2. captures touches in a transparent ordinary Android `View` above the rendering surface;
+3. forwards the original, unmodified multi-pointer event stream to `ModelViewer.onTouchEvent()`;
+4. keeps only one active camera owner—the Filament-native `Manipulator`;
+5. calls `ModelViewer.render()` without applying a competing camera pose.
 
 ## Current interaction map
 

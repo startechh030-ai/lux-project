@@ -48,3 +48,7 @@ The editor uses sticky immersive fullscreen, lays out through the navigation/sta
 ## Camera input hotfix 0.2.1
 
 Filament continues rendering into a `SurfaceView`, but touch is now captured by a separate transparent `CameraInputView` layered above it. During testing the status pill displays `CAMERA INPUT • ORBIT`, `PAN / ZOOM`, or `RESET`, proving that Android delivered the gesture to the native camera pipeline.
+
+## Single-camera fix 0.2.2
+
+Root cause: `ModelViewer.render()` applies its Manipulator camera immediately before drawing, overwriting the separate JNI camera pose. This build uses Filament's native Manipulator as the sole camera owner. The transparent input layer forwards the original complete `MotionEvent` stream to `ModelViewer.onTouchEvent()`. Model placement is restored to ModelViewer's expected default framing at z = -4.

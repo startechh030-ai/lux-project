@@ -15,7 +15,6 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import com.google.android.filament.Skybox
-import com.google.android.filament.utils.Float3
 import com.google.android.filament.utils.KTX1Loader
 import com.google.android.filament.utils.ModelViewer
 import com.google.android.filament.utils.Utils
@@ -27,7 +26,6 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
     private lateinit var cameraInput: CameraInputView
     private lateinit var viewer: ModelViewer
     private lateinit var status: TextView
-    private val nativeCamera = NativeCamera()
     private var solidSkybox: Skybox? = null
     private var rendering = false
 
@@ -53,7 +51,6 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
         // A normal transparent View captures input above the hardware-backed
         // SurfaceView. This avoids device-specific SurfaceView touch failures.
         cameraInput = CameraInputView(this).apply {
-            cameraController = nativeCamera
             onGesture = { gesture -> status.text = "CAMERA INPUT  •  $gesture" }
         }
         root.addView(cameraInput, FrameLayout.LayoutParams(-1, -1))
@@ -82,12 +79,11 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
         setContentView(root)
         applyImmersiveMode()
 
-        viewer = ModelViewer(surface, manipulator = null)
+        // Use exactly one camera owner. ModelViewer's Manipulator is backed by
+        // Filament native code and render() applies its pose once per frame.
+        viewer = ModelViewer(surface)
+        cameraInput.eventSink = { event -> viewer.onTouchEvent(event) }
         loadEnvironment()
-        surface.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-            nativeCamera.nativeSetViewport(surface.width.coerceAtLeast(1), surface.height.coerceAtLeast(1))
-        }
-        nativeCamera.nativeReset()
     }
 
     private fun loadEnvironment() {
@@ -121,10 +117,9 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
             val buffer = ByteBuffer.allocateDirect(bytes.size).order(ByteOrder.nativeOrder()).apply { put(bytes); flip() }
             viewer.loadModelGlb(buffer)
             if (viewer.asset == null) throw IllegalArgumentException("Filament could not parse this GLB")
-            // Camera math orbits the world origin, so normalize the model to
-            // that same pivot instead of ModelViewer's default z = -4 center.
-            viewer.transformToUnitCube(Float3(0f, 0f, 0f))
-            nativeCamera.nativeReset()
+            // ModelViewer's default placement (centered at z = -4) matches
+            // its native manipulator and gives consistent initial framing.
+            viewer.transformToUnitCube()
             status.text = "$name  •  ORBIT VIEW"
         } catch (e: Exception) {
             status.text = "NO MODEL LOADED"
@@ -166,8 +161,8 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
     override fun onPause() { rendering = false; Choreographer.getInstance().removeFrameCallback(this); super.onPause() }
     override fun doFrame(frameTimeNanos: Long) {
         if (!rendering) return
-        val p = nativeCamera.nativeUpdate(frameTimeNanos / 1_000_000_000.0)
-        viewer.camera.lookAt(p[0].toDouble(), p[1].toDouble(), p[2].toDouble(), p[3].toDouble(), p[4].toDouble(), p[5].toDouble(), 0.0, 1.0, 0.0)
+        // ModelViewer.render() reads its native Manipulator and applies the
+        // sole camera pose immediately before rendering.
         viewer.render(frameTimeNanos)
         Choreographer.getInstance().postFrameCallback(this)
     }
