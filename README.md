@@ -81,3 +81,16 @@ Two-finger gestures now pass through a tiny 2dp intent threshold. Separation-dom
 - Existing stable orbit, intent-locked pan, and intent-locked zoom behavior is preserved.
 
 This is intentionally a lightweight screen-space focus approximation. Exact triangle hit-point raycasting is deferred to a later painting milestone.
+
+## Milestone 1 stabilization — 0.4.1
+
+The screen-space double-tap focus experiment from 0.4.0 was removed because repeated strafe operations accumulated target translation without a real mesh hit point. Double-tap now returns to the stable home bookmark. True mesh grabbing is deferred until exact surface picking is implemented.
+
+Camera and memory changes:
+
+- orbit speed reduced from Filament's 0.01 default to 0.0035 for a heavier sculpting feel;
+- stable pan/zoom intent classifier retained;
+- GLBs stream directly into one direct buffer instead of `readBytes()` plus a second copy;
+- import limit is device-aware: 20% of Android app heap, clamped to 32–128 MB;
+- incomplete reads and unknown-size documents fail safely;
+- Java heap allocation failure displays a useful message and unloads the partial model.

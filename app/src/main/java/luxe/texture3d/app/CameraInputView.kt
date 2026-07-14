@@ -1,14 +1,10 @@
 package luxe.texture3d.app
 
-import android.animation.Animator
-import android.animation.AnimatorListenerAdapter
-import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.view.MotionEvent
 import android.view.View
-import android.view.animation.DecelerateInterpolator
 import com.google.android.filament.utils.Manipulator
 import kotlin.math.abs
 import kotlin.math.hypot
@@ -31,7 +27,6 @@ class CameraInputView(context: Context) : View(context) {
     private var moved = false
     private var lastTapTime = 0L
     private var reportedGesture = ""
-    private var focusAnimator: ValueAnimator? = null
     private var pivotVisible = false
 
     private val density = resources.displayMetrics.density
@@ -61,8 +56,6 @@ class CameraInputView(context: Context) : View(context) {
 
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                focusAnimator?.cancel()
-                focusAnimator = null
                 downX = event.x
                 downY = event.y
                 moved = false
@@ -119,8 +112,9 @@ class CameraInputView(context: Context) : View(context) {
                 if (!moved) {
                     val now = event.eventTime
                     if (now - lastTapTime in 1..350) {
-                        report("FOCUS")
-                        focusAt(event.x, event.y)
+                        manipulator.jumpToBookmark(manipulator.homeBookmark)
+                        revealPivot(1_000L)
+                        report("RESET VIEW")
                         lastTapTime = 0L
                     } else lastTapTime = now
                     performClick()
@@ -180,39 +174,6 @@ class CameraInputView(context: Context) : View(context) {
                 report("ZOOM")
             }
             else -> Unit
-        }
-    }
-
-    /**
-     * Nomad-style focus v1: smoothly drag the tapped screen location to the
-     * viewport center in Filament's strafe mode. The manipulator preserves the
-     * resulting orbit target for later orbit and zoom gestures.
-     */
-    private fun focusAt(tapX: Float, tapY: Float) {
-        if (width <= 0 || height <= 0) return
-        focusAnimator?.cancel()
-
-        val centerX = width * 0.5f
-        val centerY = height * 0.5f
-        manipulator.grabBegin(tapX.toInt(), filamentY(tapY), true)
-        revealPivot(1_200L)
-
-        focusAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = 220L
-            interpolator = DecelerateInterpolator()
-            addUpdateListener { animation ->
-                val t = animation.animatedValue as Float
-                val x = tapX + (centerX - tapX) * t
-                val y = tapY + (centerY - tapY) * t
-                manipulator.grabUpdate(x.toInt(), filamentY(y))
-            }
-            addListener(object : AnimatorListenerAdapter() {
-                override fun onAnimationEnd(animation: Animator) {
-                    manipulator.grabEnd()
-                    if (focusAnimator === animation) focusAnimator = null
-                }
-            })
-            start()
         }
     }
 

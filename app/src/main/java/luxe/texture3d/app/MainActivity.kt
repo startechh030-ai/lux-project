@@ -1,6 +1,7 @@
 package luxe.texture3d.app
 
 import androidx.appcompat.app.AppCompatActivity
+import android.app.ActivityManager
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
@@ -19,6 +20,7 @@ import com.google.android.filament.utils.KTX1Loader
 import com.google.android.filament.utils.Manipulator
 import com.google.android.filament.utils.ModelViewer
 import com.google.android.filament.utils.Utils
+import java.io.FileInputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
@@ -84,6 +86,11 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
         // One Filament-native camera owner, with our low-latency touch adapter.
         manipulator = Manipulator.Builder()
             .targetPosition(0f, 0f, -4f)
+            .orbitHomePosition(0f, 0f, 1f)
+            // Filament defaults to 0.01. A lower value gives the deliberate,
+            // weighted response expected from a mobile sculpting viewport.
+            .orbitSpeed(0.0035f, 0.0035f)
+            .zoomSpeed(0.01f)
             .viewport(surface.width.coerceAtLeast(1), surface.height.coerceAtLeast(1))
             .build(Manipulator.Mode.ORBIT)
         cameraInput.manipulator = manipulator
@@ -116,21 +123,75 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
             val name = displayName(uri)
             if (!name.lowercase().endsWith(".glb")) throw IllegalArgumentException("Please choose a .glb file")
             status.text = "LOADING  •  $name"
-            val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                ?: throw IllegalStateException("The selected file could not be opened")
-            if (bytes.size > 300 * 1024 * 1024) throw IllegalArgumentException("GLB is larger than the 300 MB safety limit")
-            val buffer = ByteBuffer.allocateDirect(bytes.size).order(ByteOrder.nativeOrder()).apply { put(bytes); flip() }
+            val fileSize = selectedFileSize(uri)
+            val safeLimit = safeGlbImportLimit()
+            if (fileSize <= 0L) {
+                throw IllegalArgumentException("Android did not provide this GLB's size")
+            }
+            if (fileSize > safeLimit) {
+                throw IllegalArgumentException(
+                    "This ${formatMb(fileSize)} MB GLB exceeds this device's ${formatMb(safeLimit)} MB safe import limit"
+                )
+            }
+
+            // Stream directly into one native buffer. The previous readBytes()
+            // path held a heap byte array and a direct copy at the same time.
+            val buffer = readDirectBuffer(uri, fileSize)
             viewer.loadModelGlb(buffer)
             if (viewer.asset == null) throw IllegalArgumentException("Filament could not parse this GLB")
             // ModelViewer's default placement (centered at z = -4) matches
             // its native manipulator and gives consistent initial framing.
             viewer.transformToUnitCube()
             status.text = "$name  •  ORBIT VIEW"
+        } catch (_: OutOfMemoryError) {
+            viewer.destroyModel()
+            status.text = "MODEL TOO HEAVY"
+            Toast.makeText(
+                this,
+                "Not enough memory for this model. Try a lower-poly GLB or smaller textures.",
+                Toast.LENGTH_LONG
+            ).show()
         } catch (e: Exception) {
             status.text = "NO MODEL LOADED"
             Toast.makeText(this, e.message ?: "Could not load GLB", Toast.LENGTH_LONG).show()
         }
     }
+
+    private fun selectedFileSize(uri: Uri): Long {
+        contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use {
+            if (it.moveToFirst() && !it.isNull(0)) return it.getLong(0)
+        }
+        return contentResolver.openFileDescriptor(uri, "r")?.use { it.statSize } ?: -1L
+    }
+
+    private fun safeGlbImportLimit(): Long {
+        val memoryClassMb = (getSystemService(ACTIVITY_SERVICE) as ActivityManager).memoryClass.toLong()
+        // GLB resources expand after parsing. Keep source data below 20% of the
+        // app heap, with conservative bounds for weak and high-memory devices.
+        val limitMb = (memoryClassMb / 5L).coerceIn(32L, 128L)
+        return limitMb * 1024L * 1024L
+    }
+
+    private fun readDirectBuffer(uri: Uri, size: Long): ByteBuffer {
+        if (size > Int.MAX_VALUE) throw IllegalArgumentException("GLB is too large for Android")
+        val output = ByteBuffer.allocateDirect(size.toInt()).order(ByteOrder.nativeOrder())
+        val descriptor = contentResolver.openFileDescriptor(uri, "r")
+            ?: throw IllegalStateException("The selected file could not be opened")
+        descriptor.use { pfd ->
+            FileInputStream(pfd.fileDescriptor).channel.use { channel ->
+                while (output.hasRemaining()) {
+                    if (channel.read(output) < 0) break
+                }
+            }
+        }
+        if (output.position() != size.toInt()) {
+            throw IllegalStateException("The GLB could not be read completely")
+        }
+        output.flip()
+        return output
+    }
+
+    private fun formatMb(bytes: Long) = bytes / (1024L * 1024L)
 
     private fun displayName(uri: Uri): String {
         contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
