@@ -67,3 +67,7 @@ The stock Filament GestureDetector intentionally waits for more than two motion 
 - Filament remains the sole camera owner.
 
 This is a small first step toward mobile-sculpting navigation without yet adding dynamic pivot picking or view snapping.
+
+## Stable pan/zoom intent 0.3.1
+
+Two-finger gestures now pass through a tiny 2dp intent threshold. Separation-dominant motion locks to zoom; midpoint-dominant motion locks to pan. Pan and zoom commands are never sent during the same gesture, eliminating pinch vibration while retaining a much smaller response threshold than Filament's stock detector.
