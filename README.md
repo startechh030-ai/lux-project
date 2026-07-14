@@ -52,3 +52,18 @@ Filament continues rendering into a `SurfaceView`, but touch is now captured by 
 ## Single-camera fix 0.2.2
 
 Root cause: `ModelViewer.render()` applies its Manipulator camera immediately before drawing, overwriting the separate JNI camera pose. This build uses Filament's native Manipulator as the sole camera owner. The transparent input layer forwards the original complete `MotionEvent` stream to `ModelViewer.onTouchEvent()`. Model placement is restored to ModelViewer's expected default framing at z = -4.
+
+## Milestone 1 camera completion 0.3.0
+
+The stock Filament GestureDetector intentionally waits for more than two motion samples, requires 4 px of midpoint travel for pan, requires 10 px of span change for zoom, and then locks the gesture to either pan or zoom. This caused the perceived two-finger dead zone.
+
+`CameraInputView` now drives the same Filament-native `Manipulator` directly:
+
+- one finger begins orbit immediately;
+- a second finger switches immediately to strafe/pan;
+- midpoint movement and pinch zoom are processed together;
+- no per-MOVE objects or arrays are allocated;
+- lifting one finger hands the gesture directly back to orbit;
+- Filament remains the sole camera owner.
+
+This is a small first step toward mobile-sculpting navigation without yet adding dynamic pivot picking or view snapping.

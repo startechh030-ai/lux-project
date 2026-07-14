@@ -16,6 +16,7 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import com.google.android.filament.Skybox
 import com.google.android.filament.utils.KTX1Loader
+import com.google.android.filament.utils.Manipulator
 import com.google.android.filament.utils.ModelViewer
 import com.google.android.filament.utils.Utils
 import java.nio.ByteBuffer
@@ -25,6 +26,7 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
     private lateinit var surface: SurfaceView
     private lateinit var cameraInput: CameraInputView
     private lateinit var viewer: ModelViewer
+    private lateinit var manipulator: Manipulator
     private lateinit var status: TextView
     private var solidSkybox: Skybox? = null
     private var rendering = false
@@ -79,10 +81,13 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
         setContentView(root)
         applyImmersiveMode()
 
-        // Use exactly one camera owner. ModelViewer's Manipulator is backed by
-        // Filament native code and render() applies its pose once per frame.
-        viewer = ModelViewer(surface)
-        cameraInput.eventSink = { event -> viewer.onTouchEvent(event) }
+        // One Filament-native camera owner, with our low-latency touch adapter.
+        manipulator = Manipulator.Builder()
+            .targetPosition(0f, 0f, -4f)
+            .viewport(surface.width.coerceAtLeast(1), surface.height.coerceAtLeast(1))
+            .build(Manipulator.Mode.ORBIT)
+        cameraInput.manipulator = manipulator
+        viewer = ModelViewer(surface, manipulator = manipulator)
         loadEnvironment()
     }
 
