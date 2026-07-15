@@ -115,3 +115,7 @@ The simultaneous Filament grab+scroll experiment was removed because some device
 - Every model import resets camera and pivot to world origin.
 
 This is the first device-validation build for exact picking. Angle snapping and trackball mode remain Phase 3B.
+
+## Phase 3A pivot safety correction — 0.5.2
+
+Picking depth is now supplied directly to Filament's inverse projection path instead of being remapped a second time. Reconstructed points must be finite and remain inside the normalized model bounds. Invalid or empty picks restore the authoritative model-center pivot `(0,0,0)`. C++ independently clamps and radius-limits every requested pivot, preventing a malformed GPU depth result from pulling the camera toward distant empty space.

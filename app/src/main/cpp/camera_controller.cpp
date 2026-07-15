@@ -17,7 +17,15 @@ struct CameraController {
         yaw=dyaw=0; pitch=dpitch=0; distance=ddistance=3.8f;
         tx=dtx=ty=dty=tz=dtz=0; lastTime=0;
     }
-    void setPivot(float x,float y,float z) { dtx=x; dty=y; dtz=z; }
+    void setPivot(float x,float y,float z) {
+        if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z)) {
+            dtx=dty=dtz=0; return;
+        }
+        x=std::clamp(x,-1.25f,1.25f); y=std::clamp(y,-1.25f,1.25f); z=std::clamp(z,-1.25f,1.25f);
+        const float length=std::sqrt(x*x+y*y+z*z);
+        if (length>1.9f) { const float s=1.9f/length; x*=s; y*=s; z*=s; }
+        dtx=x; dty=y; dtz=z;
+    }
     void orbit(float dx,float dy) {
         dyaw -= dx/std::max(width,1.0f)*2.35f;
         dpitch=std::clamp(dpitch-dy/std::max(height,1.0f)*2.15f,-1.48f,1.48f);

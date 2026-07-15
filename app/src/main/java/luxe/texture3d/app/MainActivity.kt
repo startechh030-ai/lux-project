@@ -165,10 +165,19 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
         if (viewer.asset == null || surface.width <= 0 || surface.height <= 0) return
         val pickY = surface.height - screenY.toInt()
         viewer.view.pick(screenX.toInt(), pickY, mainHandler) { result ->
-            if (result.renderable == 0 || result.depth >= 1f) return@pick
-            unproject(result.fragCoords[0], result.fragCoords[1], result.depth)?.let { world ->
+            if (result.renderable == 0) {
+                nativeCamera.nativeSetPivot(0f, 0f, 0f)
+                return@pick
+            }
+            val world = unproject(result.fragCoords[0], result.fragCoords[1], result.depth)
+            if (world != null && isValidNormalizedPivot(world)) {
                 nativeCamera.nativeSetPivot(world[0], world[1], world[2])
                 status.text = "MESH PIVOT  •  ACTIVE"
+            } else {
+                // A malformed depth result must never pull the camera away
+                // from the normalized model. Fall back to its true center.
+                nativeCamera.nativeSetPivot(0f, 0f, 0f)
+                status.text = "MODEL PIVOT  •  CENTER"
             }
         }
     }
@@ -191,13 +200,24 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
         val ndc = floatArrayOf(
             ((x - viewport.left) / viewport.width) * 2f - 1f,
             ((y - viewport.bottom) / viewport.height) * 2f - 1f,
-            depth * 2f - 1f,
+            // Filament's projection matrix consumes its native 0..1 depth.
+            // Remapping this to -1..1 produces a distant, invalid pivot.
+            depth,
             1f
         )
         val world = FloatArray(4)
         Matrix.multiplyMV(world, 0, inverse, 0, ndc, 0)
         if (abs(world[3]) < 1e-6f) return null
         return floatArrayOf(world[0] / world[3], world[1] / world[3], world[2] / world[3])
+    }
+
+    private fun isValidNormalizedPivot(point: FloatArray): Boolean {
+        if (point.size < 3 || point.any { !it.isFinite() }) return false
+        // transformToUnitCube() places all original bounds inside [-1, 1].
+        // A small margin tolerates skinning and numeric reconstruction error.
+        if (abs(point[0]) > 1.25f || abs(point[1]) > 1.25f || abs(point[2]) > 1.25f) return false
+        val radiusSquared = point[0] * point[0] + point[1] * point[1] + point[2] * point[2]
+        return radiusSquared <= 1.9f * 1.9f
     }
 
     private fun selectedFileSize(uri: Uri): Long {
