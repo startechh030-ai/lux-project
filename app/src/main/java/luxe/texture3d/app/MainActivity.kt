@@ -177,10 +177,12 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
     private fun unproject(x: Float, y: Float, depth: Float): FloatArray? {
         val viewport = viewer.view.viewport
         if (viewport.width <= 0 || viewport.height <= 0) return null
-        val projectionD = viewer.camera.getProjectionMatrix(null)
-        val viewD = viewer.camera.getViewMatrix(null)
-        val projection = FloatArray(16) { projectionD[it].toFloat() }
-        val viewMatrix = FloatArray(16) { viewD[it].toFloat() }
+        // Pass explicitly typed arrays because Camera exposes both FloatArray
+        // and DoubleArray overloads for getViewMatrix().
+        val projectionD = viewer.camera.getProjectionMatrix(DoubleArray(16))
+        val viewD = viewer.camera.getViewMatrix(DoubleArray(16))
+        val projection = FloatArray(16) { index -> projectionD[index].toFloat() }
+        val viewMatrix = FloatArray(16) { index -> viewD[index].toFloat() }
         val viewProjection = FloatArray(16)
         val inverse = FloatArray(16)
         Matrix.multiplyMM(viewProjection, 0, projection, 0, viewMatrix, 0)
