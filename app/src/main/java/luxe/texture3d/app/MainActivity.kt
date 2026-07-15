@@ -123,6 +123,10 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
             val name = displayName(uri)
             if (!name.lowercase().endsWith(".glb")) throw IllegalArgumentException("Please choose a .glb file")
             status.text = "LOADING  •  $name"
+            // Empty-scene gestures must never alter the next model's pivot.
+            cameraInput.inputEnabled = false
+            manipulator.grabEnd()
+            manipulator.jumpToBookmark(manipulator.homeBookmark)
             val fileSize = selectedFileSize(uri)
             val safeLimit = safeGlbImportLimit()
             if (fileSize <= 0L) {
@@ -142,9 +146,13 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
             // ModelViewer's default placement (centered at z = -4) matches
             // its native manipulator and gives consistent initial framing.
             viewer.transformToUnitCube()
+            // Every import starts from the exact home target and orientation.
+            manipulator.jumpToBookmark(manipulator.homeBookmark)
+            cameraInput.inputEnabled = true
             status.text = "$name  •  ORBIT VIEW"
         } catch (_: OutOfMemoryError) {
             viewer.destroyModel()
+            cameraInput.inputEnabled = false
             status.text = "MODEL TOO HEAVY"
             Toast.makeText(
                 this,
@@ -152,7 +160,8 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
                 Toast.LENGTH_LONG
             ).show()
         } catch (e: Exception) {
-            status.text = "NO MODEL LOADED"
+            cameraInput.inputEnabled = viewer.asset != null
+            status.text = if (viewer.asset != null) "PREVIOUS MODEL ACTIVE" else "NO MODEL LOADED"
             Toast.makeText(this, e.message ?: "Could not load GLB", Toast.LENGTH_LONG).show()
         }
     }

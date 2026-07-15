@@ -98,3 +98,7 @@ Camera and memory changes:
 ## Fluid two-finger navigation — 0.4.2
 
 Pan/zoom intent locking and its 2dp threshold were removed. Two-finger midpoint and separation are filtered independently, then applied together. Pan remains continuously active; pinch zoom is centered on the stable viewport pivot rather than the noisy touch midpoint. Orbit sensitivity and the one-finger code path are unchanged from 0.4.1.
+
+## Stable navigation rollback and scene reset — 0.4.3
+
+The simultaneous Filament grab+scroll experiment was removed because some devices stop zooming when both native operations share one grab session. The proven intent-separated pan/zoom path is restored with a reduced 0.75dp confidence threshold. Dynamic/fake pivot visuals are removed. Camera input is disabled while no model exists, and every successful import restores the native manipulator's home bookmark before input is enabled. This prevents empty-scene or previous-model target offsets from affecting a newly imported model.
