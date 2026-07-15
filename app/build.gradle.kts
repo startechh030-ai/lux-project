@@ -11,8 +11,8 @@ android {
         applicationId = "luxe.texture3d.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 10
-        versionName = "0.4.1"
+        versionCode = 11
+        versionName = "0.4.2"
         externalNativeBuild {
             cmake { cppFlags += listOf("-std=c++17", "-O2", "-ffast-math") }
         }

@@ -94,3 +94,7 @@ Camera and memory changes:
 - import limit is device-aware: 20% of Android app heap, clamped to 32–128 MB;
 - incomplete reads and unknown-size documents fail safely;
 - Java heap allocation failure displays a useful message and unloads the partial model.
+
+## Fluid two-finger navigation — 0.4.2
+
+Pan/zoom intent locking and its 2dp threshold were removed. Two-finger midpoint and separation are filtered independently, then applied together. Pan remains continuously active; pinch zoom is centered on the stable viewport pivot rather than the noisy touch midpoint. Orbit sensitivity and the one-finger code path are unchanged from 0.4.1.
