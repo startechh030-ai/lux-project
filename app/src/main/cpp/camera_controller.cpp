@@ -6,63 +6,48 @@
 
 namespace {
 struct CameraController {
-    float yaw = 0.0f, pitch = 0.12f, distance = 3.2f;
-    float targetYaw = 0.0f, targetPitch = 0.12f, targetDistance = 3.2f;
-    float panX = 0.0f, panY = 0.0f, panZ = 0.0f;
-    float targetPanX = 0.0f, targetPanY = 0.0f, targetPanZ = 0.0f;
-    float width = 1.0f, height = 1.0f;
-    double lastTime = 0.0;
+    float yaw=0, pitch=0, distance=3.8f;
+    float dyaw=0, dpitch=0, ddistance=3.8f;
+    float tx=0, ty=0, tz=0, dtx=0, dty=0, dtz=0;
+    float width=1, height=1;
+    double lastTime=0;
     std::mutex mutex;
 
     void reset() {
-        yaw = targetYaw = 0.0f; pitch = targetPitch = 0.12f;
-        distance = targetDistance = 3.2f;
-        panX = targetPanX = panY = targetPanY = panZ = targetPanZ = 0.0f;
+        yaw=dyaw=0; pitch=dpitch=0; distance=ddistance=3.8f;
+        tx=dtx=ty=dty=tz=dtz=0; lastTime=0;
     }
-    void orbit(float dx, float dy) {
-        targetYaw -= dx / std::max(width, 1.0f) * 4.2f;
-        targetPitch = std::clamp(targetPitch - dy / std::max(height, 1.0f) * 3.2f, -1.48f, 1.48f);
+    void setPivot(float x,float y,float z) { dtx=x; dty=y; dtz=z; }
+    void orbit(float dx,float dy) {
+        dyaw -= dx/std::max(width,1.0f)*2.35f;
+        dpitch=std::clamp(dpitch-dy/std::max(height,1.0f)*2.15f,-1.48f,1.48f);
     }
     void zoom(float scale) {
-        if (std::isfinite(scale) && scale > 0.01f)
-            targetDistance = std::clamp(targetDistance / scale, 1.15f, 12.0f);
+        if (std::isfinite(scale)&&scale>0.01f) ddistance=std::clamp(ddistance/scale,0.35f,16.0f);
     }
-    void pan(float dx, float dy) {
-        // Translate the orbit target in the camera's screen plane. This keeps
-        // panning intuitive after the view has been rotated (Nomad/Blender style).
-        const float units = targetDistance * 1.55f / std::max(height, 1.0f);
-        const float sy = std::sin(targetYaw), cy = std::cos(targetYaw);
-        const float sp = std::sin(targetPitch), cp = std::cos(targetPitch);
-        const float rightX = cy, rightY = 0.0f, rightZ = -sy;
-        const float upX = -sp * sy, upY = cp, upZ = -sp * cy;
-
-        targetPanX += (-dx * rightX + dy * upX) * units;
-        targetPanY += (-dx * rightY + dy * upY) * units;
-        targetPanZ += (-dx * rightZ + dy * upZ) * units;
-        targetPanX = std::clamp(targetPanX, -4.0f, 4.0f);
-        targetPanY = std::clamp(targetPanY, -4.0f, 4.0f);
-        targetPanZ = std::clamp(targetPanZ, -4.0f, 4.0f);
+    void pan(float dx,float dy) {
+        float u=ddistance*1.45f/std::max(height,1.0f);
+        float sy=std::sin(dyaw), cy=std::cos(dyaw), sp=std::sin(dpitch), cp=std::cos(dpitch);
+        float rx=cy, rz=-sy, ux=-sp*sy, uy=cp, uz=-sp*cy;
+        dtx += (-dx*rx+dy*ux)*u; dty += dy*uy*u; dtz += (-dx*rz+dy*uz)*u;
     }
     void update(double now) {
-        float dt = lastTime == 0.0 ? 1.0f / 60.0f : (float)std::clamp(now-lastTime, 0.0, 0.05);
-        lastTime = now;
-        const float a = 1.0f - std::exp(-14.0f * dt);
-        yaw += (targetYaw-yaw)*a; pitch += (targetPitch-pitch)*a;
-        distance += (targetDistance-distance)*a;
-        panX += (targetPanX-panX)*a; panY += (targetPanY-panY)*a;
-        panZ += (targetPanZ-panZ)*a;
+        float dt=lastTime==0?1.f/60.f:(float)std::clamp(now-lastTime,0.0,0.05); lastTime=now;
+        float a=1-std::exp(-11.f*dt), pa=1-std::exp(-8.f*dt);
+        yaw+=(dyaw-yaw)*a; pitch+=(dpitch-pitch)*a; distance+=(ddistance-distance)*a;
+        tx+=(dtx-tx)*pa; ty+=(dty-ty)*pa; tz+=(dtz-tz)*pa;
     }
-    std::array<float, 6> pose() const {
-        const float cp=std::cos(pitch), sp=std::sin(pitch), sy=std::sin(yaw), cy=std::cos(yaw);
-        float tx=panX, ty=panY, tz=panZ;
-        return {tx + distance*cp*sy, ty + distance*sp, tz + distance*cp*cy, tx, ty, tz};
+    std::array<float,9> pose() const {
+        float cp=std::cos(pitch),sp=std::sin(pitch),sy=std::sin(yaw),cy=std::cos(yaw);
+        return {tx+distance*cp*sy,ty+distance*sp,tz+distance*cp*cy,tx,ty,tz,0,1,0};
     }
-} camera;
+} c;
 }
-
-extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativeSetViewport(JNIEnv*, jobject, jint w, jint h) { std::lock_guard<std::mutex> l(camera.mutex); camera.width=(float)w; camera.height=(float)h; }
-extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativeOrbit(JNIEnv*, jobject, jfloat dx, jfloat dy) { std::lock_guard<std::mutex> l(camera.mutex); camera.orbit(dx,dy); }
-extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativeZoom(JNIEnv*, jobject, jfloat s) { std::lock_guard<std::mutex> l(camera.mutex); camera.zoom(s); }
-extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativePan(JNIEnv*, jobject, jfloat dx, jfloat dy) { std::lock_guard<std::mutex> l(camera.mutex); camera.pan(dx,dy); }
-extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativeReset(JNIEnv*, jobject) { std::lock_guard<std::mutex> l(camera.mutex); camera.reset(); camera.lastTime=0; }
-extern "C" JNIEXPORT jfloatArray JNICALL Java_luxe_texture3d_app_NativeCamera_nativeUpdate(JNIEnv* env, jobject, jdouble t) { std::lock_guard<std::mutex> l(camera.mutex); camera.update(t); auto p=camera.pose(); jfloatArray out=env->NewFloatArray(6); env->SetFloatArrayRegion(out,0,6,p.data()); return out; }
+#define LOCK std::lock_guard<std::mutex> l(c.mutex)
+extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativeSetViewport(JNIEnv*,jobject,jint w,jint h){LOCK;c.width=w;c.height=h;}
+extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativeOrbit(JNIEnv*,jobject,jfloat x,jfloat y){LOCK;c.orbit(x,y);}
+extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativeZoom(JNIEnv*,jobject,jfloat s){LOCK;c.zoom(s);}
+extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativePan(JNIEnv*,jobject,jfloat x,jfloat y){LOCK;c.pan(x,y);}
+extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativeSetPivot(JNIEnv*,jobject,jfloat x,jfloat y,jfloat z){LOCK;c.setPivot(x,y,z);}
+extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativeReset(JNIEnv*,jobject){LOCK;c.reset();}
+extern "C" JNIEXPORT jfloatArray JNICALL Java_luxe_texture3d_app_NativeCamera_nativeUpdate(JNIEnv* e,jobject,jdouble t){LOCK;c.update(t);auto p=c.pose();auto a=e->NewFloatArray(9);e->SetFloatArrayRegion(a,0,9,p.data());return a;}

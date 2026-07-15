@@ -102,3 +102,16 @@ Pan/zoom intent locking and its 2dp threshold were removed. Two-finger midpoint 
 ## Stable navigation rollback and scene reset — 0.4.3
 
 The simultaneous Filament grab+scroll experiment was removed because some devices stop zooming when both native operations share one grab session. The proven intent-separated pan/zoom path is restored with a reduced 0.75dp confidence threshold. Dynamic/fake pivot visuals are removed. Camera input is disabled while no model exists, and every successful import restores the native manipulator's home bookmark before input is enabled. This prevents empty-scene or previous-model target offsets from affecting a newly imported model.
+
+## Phase 3A — native mesh-pivot prototype 0.5.0
+
+- `LuxeModelViewer` is a version-matched fork of Filament 1.69.4 ModelViewer whose render path does not overwrite the external camera.
+- C++ again owns yaw, pitch, distance, world-space target, screen-plane pan, clamps, and exponential smoothing.
+- A one-finger touch submits an asynchronous Filament GPU pick query.
+- Successful renderable picks use depth-buffer unprojection to obtain a world-space point.
+- The desired native pivot glides toward the picked surface and persists after release.
+- Empty-space picks leave the current pivot unchanged.
+- Two-finger pan and pinch zoom are processed together by C++, without Filament Manipulator grab/scroll conflicts.
+- Every model import resets camera and pivot to world origin.
+
+This is the first device-validation build for exact picking. Angle snapping and trackball mode remain Phase 3B.

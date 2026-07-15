@@ -4,6 +4,9 @@ import androidx.appcompat.app.AppCompatActivity
 import android.app.ActivityManager
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.opengl.Matrix
 import android.provider.OpenableColumns
 import android.view.Choreographer
 import android.view.Gravity
@@ -17,18 +20,18 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import com.google.android.filament.Skybox
 import com.google.android.filament.utils.KTX1Loader
-import com.google.android.filament.utils.Manipulator
-import com.google.android.filament.utils.ModelViewer
 import com.google.android.filament.utils.Utils
 import java.io.FileInputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import kotlin.math.abs
 
 class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
     private lateinit var surface: SurfaceView
     private lateinit var cameraInput: CameraInputView
-    private lateinit var viewer: ModelViewer
-    private lateinit var manipulator: Manipulator
+    private lateinit var viewer: LuxeModelViewer
+    private val nativeCamera = NativeCamera()
+    private val mainHandler = Handler(Looper.getMainLooper())
     private lateinit var status: TextView
     private var solidSkybox: Skybox? = null
     private var rendering = false
@@ -55,7 +58,9 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
         // A normal transparent View captures input above the hardware-backed
         // SurfaceView. This avoids device-specific SurfaceView touch failures.
         cameraInput = CameraInputView(this).apply {
+            camera = nativeCamera
             onGesture = { gesture -> status.text = "CAMERA INPUT  •  $gesture" }
+            onOrbitTouch = { x, y -> pickPivot(x, y) }
         }
         root.addView(cameraInput, FrameLayout.LayoutParams(-1, -1))
 
@@ -83,18 +88,11 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
         setContentView(root)
         applyImmersiveMode()
 
-        // One Filament-native camera owner, with our low-latency touch adapter.
-        manipulator = Manipulator.Builder()
-            .targetPosition(0f, 0f, -4f)
-            .orbitHomePosition(0f, 0f, 1f)
-            // Filament defaults to 0.01. A lower value gives the deliberate,
-            // weighted response expected from a mobile sculpting viewport.
-            .orbitSpeed(0.0035f, 0.0035f)
-            .zoomSpeed(0.01f)
-            .viewport(surface.width.coerceAtLeast(1), surface.height.coerceAtLeast(1))
-            .build(Manipulator.Mode.ORBIT)
-        cameraInput.manipulator = manipulator
-        viewer = ModelViewer(surface, manipulator = manipulator)
+        // Forked viewer keeps Filament loading/rendering but never overwrites
+        // the camera pose supplied by the Luxe C++ controller.
+        viewer = LuxeModelViewer(surface)
+        nativeCamera.nativeSetViewport(surface.width.coerceAtLeast(1), surface.height.coerceAtLeast(1))
+        nativeCamera.nativeReset()
         loadEnvironment()
     }
 
@@ -125,8 +123,7 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
             status.text = "LOADING  •  $name"
             // Empty-scene gestures must never alter the next model's pivot.
             cameraInput.inputEnabled = false
-            manipulator.grabEnd()
-            manipulator.jumpToBookmark(manipulator.homeBookmark)
+            nativeCamera.nativeReset()
             val fileSize = selectedFileSize(uri)
             val safeLimit = safeGlbImportLimit()
             if (fileSize <= 0L) {
@@ -143,11 +140,9 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
             val buffer = readDirectBuffer(uri, fileSize)
             viewer.loadModelGlb(buffer)
             if (viewer.asset == null) throw IllegalArgumentException("Filament could not parse this GLB")
-            // ModelViewer's default placement (centered at z = -4) matches
-            // its native manipulator and gives consistent initial framing.
-            viewer.transformToUnitCube()
-            // Every import starts from the exact home target and orientation.
-            manipulator.jumpToBookmark(manipulator.homeBookmark)
+            // Native camera and normalized model share the world origin.
+            viewer.transformToUnitCube(com.google.android.filament.utils.Float3(0f, 0f, 0f))
+            nativeCamera.nativeReset()
             cameraInput.inputEnabled = true
             status.text = "$name  •  ORBIT VIEW"
         } catch (_: OutOfMemoryError) {
@@ -164,6 +159,43 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
             status.text = if (viewer.asset != null) "PREVIOUS MODEL ACTIVE" else "NO MODEL LOADED"
             Toast.makeText(this, e.message ?: "Could not load GLB", Toast.LENGTH_LONG).show()
         }
+    }
+
+    private fun pickPivot(screenX: Float, screenY: Float) {
+        if (viewer.asset == null || surface.width <= 0 || surface.height <= 0) return
+        val pickY = surface.height - screenY.toInt()
+        viewer.view.pick(screenX.toInt(), pickY, mainHandler) { result ->
+            if (result.renderable == 0 || result.depth >= 1f) return@pick
+            unproject(result.fragCoords[0], result.fragCoords[1], result.depth)?.let { world ->
+                nativeCamera.nativeSetPivot(world[0], world[1], world[2])
+                status.text = "MESH PIVOT  •  ACTIVE"
+            }
+        }
+    }
+
+    /** Converts Filament GL fragment coordinates and depth into world space. */
+    private fun unproject(x: Float, y: Float, depth: Float): FloatArray? {
+        val viewport = viewer.view.viewport
+        if (viewport.width <= 0 || viewport.height <= 0) return null
+        val projectionD = viewer.camera.getProjectionMatrix(null)
+        val viewD = viewer.camera.getViewMatrix(null)
+        val projection = FloatArray(16) { projectionD[it].toFloat() }
+        val viewMatrix = FloatArray(16) { viewD[it].toFloat() }
+        val viewProjection = FloatArray(16)
+        val inverse = FloatArray(16)
+        Matrix.multiplyMM(viewProjection, 0, projection, 0, viewMatrix, 0)
+        if (!Matrix.invertM(inverse, 0, viewProjection, 0)) return null
+
+        val ndc = floatArrayOf(
+            ((x - viewport.left) / viewport.width) * 2f - 1f,
+            ((y - viewport.bottom) / viewport.height) * 2f - 1f,
+            depth * 2f - 1f,
+            1f
+        )
+        val world = FloatArray(4)
+        Matrix.multiplyMV(world, 0, inverse, 0, ndc, 0)
+        if (abs(world[3]) < 1e-6f) return null
+        return floatArrayOf(world[0] / world[3], world[1] / world[3], world[2] / world[3])
     }
 
     private fun selectedFileSize(uri: Uri): Long {
@@ -236,8 +268,12 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
     override fun onPause() { rendering = false; Choreographer.getInstance().removeFrameCallback(this); super.onPause() }
     override fun doFrame(frameTimeNanos: Long) {
         if (!rendering) return
-        // ModelViewer.render() reads its native Manipulator and applies the
-        // sole camera pose immediately before rendering.
+        val pose = nativeCamera.nativeUpdate(frameTimeNanos / 1_000_000_000.0)
+        viewer.camera.lookAt(
+            pose[0].toDouble(), pose[1].toDouble(), pose[2].toDouble(),
+            pose[3].toDouble(), pose[4].toDouble(), pose[5].toDouble(),
+            pose[6].toDouble(), pose[7].toDouble(), pose[8].toDouble()
+        )
         viewer.render(frameTimeNanos)
         Choreographer.getInstance().postFrameCallback(this)
     }
