@@ -119,3 +119,12 @@ This is the first device-validation build for exact picking. Angle snapping and 
 ## Phase 3A pivot safety correction — 0.5.2
 
 Picking depth is now supplied directly to Filament's inverse projection path instead of being remapped a second time. Reconstructed points must be finite and remain inside the normalized model bounds. Invalid or empty picks restore the authoritative model-center pivot `(0,0,0)`. C++ independently clamps and radius-limits every requested pivot, preventing a malformed GPU depth result from pulling the camera toward distant empty space.
+
+## Phase 3A motion stabilization — 0.5.3
+
+- orbit signs reversed so viewport content follows finger motion;
+- pivot rebasing preserves both current and desired world-space eye positions;
+- an asynchronous pick can no longer translate or zoom the visible camera when focus changes;
+- JNI fills one lifetime `FloatArray(9)` rather than allocating a new array every rendered frame;
+- gesture status text updates only when gesture mode changes, not on every MotionEvent;
+- native bounds checks and depth validation remain active.

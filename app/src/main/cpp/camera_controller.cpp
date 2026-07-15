@@ -18,17 +18,39 @@ struct CameraController {
         tx=dtx=ty=dty=tz=dtz=0; lastTime=0;
     }
     void setPivot(float x,float y,float z) {
-        if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z)) {
-            dtx=dty=dtz=0; return;
-        }
+        if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z)) x=y=z=0;
         x=std::clamp(x,-1.25f,1.25f); y=std::clamp(y,-1.25f,1.25f); z=std::clamp(z,-1.25f,1.25f);
         const float length=std::sqrt(x*x+y*y+z*z);
         if (length>1.9f) { const float s=1.9f/length; x*=s; y*=s; z*=s; }
-        dtx=x; dty=y; dtz=z;
+
+        // Rebase both current and desired spherical coordinates around the new
+        // pivot while preserving their world-space eye positions. Changing
+        // focus therefore causes no visible translation, zoom, or camera jump.
+        auto rebase=[](float ex,float ey,float ez,float px,float py,float pz,
+                       float& outYaw,float& outPitch,float& outDistance) {
+            const float vx=ex-px, vy=ey-py, vz=ez-pz;
+            outDistance=std::clamp(std::sqrt(vx*vx+vy*vy+vz*vz),0.35f,16.0f);
+            outYaw=std::atan2(vx,vz);
+            outPitch=std::asin(std::clamp(vy/outDistance,-1.0f,1.0f));
+        };
+        const float ccp=std::cos(pitch), csp=std::sin(pitch);
+        const float csy=std::sin(yaw), ccy=std::cos(yaw);
+        const float currentEyeX=tx+distance*ccp*csy;
+        const float currentEyeY=ty+distance*csp;
+        const float currentEyeZ=tz+distance*ccp*ccy;
+        const float dcp=std::cos(dpitch), dsp=std::sin(dpitch);
+        const float dsy=std::sin(dyaw), dcy=std::cos(dyaw);
+        const float desiredEyeX=dtx+ddistance*dcp*dsy;
+        const float desiredEyeY=dty+ddistance*dsp;
+        const float desiredEyeZ=dtz+ddistance*dcp*dcy;
+        tx=x; ty=y; tz=z; dtx=x; dty=y; dtz=z;
+        rebase(currentEyeX,currentEyeY,currentEyeZ,x,y,z,yaw,pitch,distance);
+        rebase(desiredEyeX,desiredEyeY,desiredEyeZ,x,y,z,dyaw,dpitch,ddistance);
     }
     void orbit(float dx,float dy) {
-        dyaw -= dx/std::max(width,1.0f)*2.35f;
-        dpitch=std::clamp(dpitch-dy/std::max(height,1.0f)*2.15f,-1.48f,1.48f);
+        // Content follows the artist's finger, matching mobile sculpting apps.
+        dyaw += dx/std::max(width,1.0f)*2.35f;
+        dpitch=std::clamp(dpitch+dy/std::max(height,1.0f)*2.15f,-1.48f,1.48f);
     }
     void zoom(float scale) {
         if (std::isfinite(scale)&&scale>0.01f) ddistance=std::clamp(ddistance/scale,0.35f,16.0f);
@@ -58,4 +80,7 @@ extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativeZoo
 extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativePan(JNIEnv*,jobject,jfloat x,jfloat y){LOCK;c.pan(x,y);}
 extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativeSetPivot(JNIEnv*,jobject,jfloat x,jfloat y,jfloat z){LOCK;c.setPivot(x,y,z);}
 extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativeReset(JNIEnv*,jobject){LOCK;c.reset();}
-extern "C" JNIEXPORT jfloatArray JNICALL Java_luxe_texture3d_app_NativeCamera_nativeUpdate(JNIEnv* e,jobject,jdouble t){LOCK;c.update(t);auto p=c.pose();auto a=e->NewFloatArray(9);e->SetFloatArrayRegion(a,0,9,p.data());return a;}
+extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativeUpdate(JNIEnv* e,jobject,jdouble t,jfloatArray out){
+    LOCK; c.update(t); auto p=c.pose();
+    if (out && e->GetArrayLength(out)>=9) e->SetFloatArrayRegion(out,0,9,p.data());
+}

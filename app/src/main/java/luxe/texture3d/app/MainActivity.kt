@@ -31,6 +31,7 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
     private lateinit var cameraInput: CameraInputView
     private lateinit var viewer: LuxeModelViewer
     private val nativeCamera = NativeCamera()
+    private val cameraPose = FloatArray(9)
     private val mainHandler = Handler(Looper.getMainLooper())
     private lateinit var status: TextView
     private var solidSkybox: Skybox? = null
@@ -290,11 +291,13 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
     override fun onPause() { rendering = false; Choreographer.getInstance().removeFrameCallback(this); super.onPause() }
     override fun doFrame(frameTimeNanos: Long) {
         if (!rendering) return
-        val pose = nativeCamera.nativeUpdate(frameTimeNanos / 1_000_000_000.0)
+        // Reuse one pose array for the app lifetime; no JNI array allocation
+        // or young-generation GC pressure occurs in the render loop.
+        nativeCamera.nativeUpdate(frameTimeNanos / 1_000_000_000.0, cameraPose)
         viewer.camera.lookAt(
-            pose[0].toDouble(), pose[1].toDouble(), pose[2].toDouble(),
-            pose[3].toDouble(), pose[4].toDouble(), pose[5].toDouble(),
-            pose[6].toDouble(), pose[7].toDouble(), pose[8].toDouble()
+            cameraPose[0].toDouble(), cameraPose[1].toDouble(), cameraPose[2].toDouble(),
+            cameraPose[3].toDouble(), cameraPose[4].toDouble(), cameraPose[5].toDouble(),
+            cameraPose[6].toDouble(), cameraPose[7].toDouble(), cameraPose[8].toDouble()
         )
         viewer.render(frameTimeNanos)
         Choreographer.getInstance().postFrameCallback(this)

@@ -7,6 +7,6 @@ class NativeCamera {
     external fun nativePan(dx: Float, dy: Float)
     external fun nativeSetPivot(x: Float, y: Float, z: Float)
     external fun nativeReset()
-    external fun nativeUpdate(seconds: Double): FloatArray
+    external fun nativeUpdate(seconds: Double, outputPose: FloatArray)
     companion object { init { System.loadLibrary("luxe_camera") } }
 }

@@ -14,6 +14,7 @@ class CameraInputView(context: Context) : View(context) {
 
     private var lastX=0f; private var lastY=0f; private var lastSpan=0f
     private var count=0
+    private var reportedGesture=""
 
     init { isClickable=true; setBackgroundColor(android.graphics.Color.TRANSPARENT) }
 
@@ -26,20 +27,20 @@ class CameraInputView(context: Context) : View(context) {
         if (!inputEnabled || !::camera.isInitialized) return true
         when(e.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                count=1; lastX=e.x; lastY=e.y
+                count=1; lastX=e.x; lastY=e.y; reportedGesture=""
                 onOrbitTouch?.invoke(e.x,e.y)
             }
             MotionEvent.ACTION_POINTER_DOWN -> { baseline(e) }
             MotionEvent.ACTION_MOVE -> {
                 if(e.pointerCount==1 && count==1) {
-                    camera.nativeOrbit(e.x-lastX,e.y-lastY); onGesture?.invoke("ORBIT")
+                    camera.nativeOrbit(e.x-lastX,e.y-lastY); report("ORBIT")
                     lastX=e.x;lastY=e.y
                 } else if(e.pointerCount>=2) {
                     val x=midX(e);val y=midY(e);val s=span(e)
                     if(count==e.pointerCount) {
                         camera.nativePan(x-lastX,y-lastY)
                         if(lastSpan>1f&&s>1f) camera.nativeZoom(s/lastSpan)
-                        onGesture?.invoke("PAN / ZOOM")
+                        report("PAN / ZOOM")
                     }
                     lastX=x;lastY=y;lastSpan=s;count=e.pointerCount
                 }
@@ -60,4 +61,10 @@ class CameraInputView(context: Context) : View(context) {
     private fun midX(e:MotionEvent)=(e.getX(0)+e.getX(1))*0.5f
     private fun midY(e:MotionEvent)=(e.getY(0)+e.getY(1))*0.5f
     private fun span(e:MotionEvent)=hypot(e.getX(1)-e.getX(0),e.getY(1)-e.getY(0))
+    private fun report(name:String) {
+        if (reportedGesture != name) {
+            reportedGesture=name
+            onGesture?.invoke(name)
+        }
+    }
 }
