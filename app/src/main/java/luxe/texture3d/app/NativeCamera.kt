@@ -4,6 +4,8 @@ class NativeCamera {
     external fun nativeSetViewport(width: Int, height: Int)
     external fun nativeBeginOrbit()
     external fun nativeOrbitTo(totalDx: Float, totalDy: Float)
+    /** Compatibility only for stale pre-Phase-3 input views. */
+    external fun nativeOrbit(dx: Float, dy: Float)
     external fun nativeEndOrbit()
     external fun nativeZoom(scaleFactor: Float)
     external fun nativePan(dx: Float, dy: Float)

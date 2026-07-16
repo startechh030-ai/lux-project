@@ -96,6 +96,12 @@ struct CameraController {
 extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativeSetViewport(JNIEnv*,jobject,jint w,jint h){LOCK;c.width=w;c.height=h;}
 extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativeBeginOrbit(JNIEnv*,jobject){LOCK;c.beginOrbit();}
 extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativeOrbitTo(JNIEnv*,jobject,jfloat x,jfloat y){LOCK;c.orbitTo(x,y);}
+// Compatibility JNI for obsolete CameraSurfaceView files. The current app
+// never calls this method; it uses beginOrbit + orbitTo gesture snapshots.
+extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativeOrbit(JNIEnv*,jobject,jfloat x,jfloat y){
+    LOCK; c.dyaw+=x/std::max(c.width,1.0f)*2.35f;
+    c.dpitch=std::clamp(c.dpitch+y/std::max(c.height,1.0f)*2.15f,-1.48f,1.48f);
+}
 extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativeEndOrbit(JNIEnv*,jobject){LOCK;c.endOrbit();}
 extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativeZoom(JNIEnv*,jobject,jfloat s){LOCK;c.zoom(s);}
 extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativePan(JNIEnv*,jobject,jfloat x,jfloat y){LOCK;c.pan(x,y);}
