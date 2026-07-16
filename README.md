@@ -136,3 +136,11 @@ GPU pick results are queued as a pending pivot and committed only at the beginni
 ## Phase 3A direction and touch filtering — 0.5.6
 
 Horizontal and vertical orbit signs were reversed to match the requested swipe direction. Two-finger centroid and separation now use independent low-pass input filtering before native pan and zoom, with no confidence dead zone. Valid GPU picks briefly display an ice-blue ring at the actual picked screen location; empty or rejected picks clear it. Pivot feedback is also cleared on every import.
+
+## Phase 3A clean mesh/vertical/zoom fix — 0.5.7
+
+- horizontal orbit mapping is unchanged from 0.5.6;
+- vertical mapping alone is reversed to match finger direction;
+- each GPU pick captures its inverse view-projection matrix and viewport at submission time, so asynchronous depth is reconstructed against the correct camera frame;
+- pan and pinch use separate response filters;
+- pinch distance is applied immediately after filtered input, removing the second native interpolation that caused rubber-band lag.

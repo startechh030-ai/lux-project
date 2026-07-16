@@ -19,7 +19,8 @@ class CameraInputView(context: Context) : View(context) {
     private var orbitStartX=0f; private var orbitStartY=0f
     private var count=0
     private var reportedGesture=""
-    private val touchFilter=0.58f
+    private val panFilter=0.58f
+    private val zoomFilter=0.78f
 
     private var pivotX=0f; private var pivotY=0f; private var pivotVisible=false
     private val pivotPaint=Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -76,9 +77,9 @@ class CameraInputView(context: Context) : View(context) {
                 } else if(e.pointerCount>=2) {
                     val rawX=midX(e); val rawY=midY(e); val rawSpan=span(e)
                     if(count==e.pointerCount) {
-                        filteredX+=(rawX-filteredX)*touchFilter
-                        filteredY+=(rawY-filteredY)*touchFilter
-                        filteredSpan+=(rawSpan-filteredSpan)*touchFilter
+                        filteredX+=(rawX-filteredX)*panFilter
+                        filteredY+=(rawY-filteredY)*panFilter
+                        filteredSpan+=(rawSpan-filteredSpan)*zoomFilter
                         camera.nativePan(filteredX-lastX,filteredY-lastY)
                         if(lastSpan>1f&&filteredSpan>1f) camera.nativeZoom(filteredSpan/lastSpan)
                         report("PAN / ZOOM")

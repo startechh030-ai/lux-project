@@ -165,14 +165,29 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
 
     private fun pickPivot(screenX: Float, screenY: Float) {
         if (viewer.asset == null || surface.width <= 0 || surface.height <= 0) return
+
+        // GPU picking is asynchronous. Snapshot the exact camera transform and
+        // viewport used when the query is submitted; never mix returned depth
+        // with matrices from a later, already-rotated frame.
+        val inverseViewProjection = captureInverseViewProjection() ?: return
+        val viewport = viewer.view.viewport
+        val viewportLeft = viewport.left
+        val viewportBottom = viewport.bottom
+        val viewportWidth = viewport.width
+        val viewportHeight = viewport.height
         val pickY = surface.height - screenY.toInt()
+
         viewer.view.pick(screenX.toInt(), pickY, mainHandler) { result ->
             if (result.renderable == 0) {
                 nativeCamera.nativeQueuePivot(0f, 0f, 0f)
                 cameraInput.clearPivotFeedback()
                 return@pick
             }
-            val world = unproject(result.fragCoords[0], result.fragCoords[1], result.depth)
+            val world = unproject(
+                result.fragCoords[0], result.fragCoords[1], result.depth,
+                inverseViewProjection, viewportLeft, viewportBottom,
+                viewportWidth, viewportHeight
+            )
             if (world != null && isValidNormalizedPivot(world)) {
                 nativeCamera.nativeQueuePivot(world[0], world[1], world[2])
                 cameraInput.showPivotFeedback(
@@ -180,8 +195,6 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
                 )
                 status.text = "MESH PIVOT  •  READY"
             } else {
-                // A malformed depth result must never pull the camera away
-                // from the normalized model. Fall back to its true center.
                 nativeCamera.nativeQueuePivot(0f, 0f, 0f)
                 cameraInput.clearPivotFeedback()
                 status.text = "MODEL PIVOT  •  READY"
@@ -189,12 +202,7 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
         }
     }
 
-    /** Converts Filament GL fragment coordinates and depth into world space. */
-    private fun unproject(x: Float, y: Float, depth: Float): FloatArray? {
-        val viewport = viewer.view.viewport
-        if (viewport.width <= 0 || viewport.height <= 0) return null
-        // Pass explicitly typed arrays because Camera exposes both FloatArray
-        // and DoubleArray overloads for getViewMatrix().
+    private fun captureInverseViewProjection(): FloatArray? {
         val projectionD = viewer.camera.getProjectionMatrix(DoubleArray(16))
         val viewD = viewer.camera.getViewMatrix(DoubleArray(16))
         val projection = FloatArray(16) { index -> projectionD[index].toFloat() }
@@ -202,18 +210,22 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
         val viewProjection = FloatArray(16)
         val inverse = FloatArray(16)
         Matrix.multiplyMM(viewProjection, 0, projection, 0, viewMatrix, 0)
-        if (!Matrix.invertM(inverse, 0, viewProjection, 0)) return null
+        return if (Matrix.invertM(inverse, 0, viewProjection, 0)) inverse else null
+    }
 
+    private fun unproject(
+        x: Float, y: Float, depth: Float, inverseViewProjection: FloatArray,
+        viewportLeft: Int, viewportBottom: Int, viewportWidth: Int, viewportHeight: Int
+    ): FloatArray? {
+        if (viewportWidth <= 0 || viewportHeight <= 0) return null
         val ndc = floatArrayOf(
-            ((x - viewport.left) / viewport.width) * 2f - 1f,
-            ((y - viewport.bottom) / viewport.height) * 2f - 1f,
-            // Filament's projection matrix consumes its native 0..1 depth.
-            // Remapping this to -1..1 produces a distant, invalid pivot.
+            ((x - viewportLeft) / viewportWidth) * 2f - 1f,
+            ((y - viewportBottom) / viewportHeight) * 2f - 1f,
             depth,
             1f
         )
         val world = FloatArray(4)
-        Matrix.multiplyMV(world, 0, inverse, 0, ndc, 0)
+        Matrix.multiplyMV(world, 0, inverseViewProjection, 0, ndc, 0)
         if (abs(world[3]) < 1e-6f) return null
         return floatArrayOf(world[0] / world[3], world[1] / world[3], world[2] / world[3])
     }

@@ -68,11 +68,16 @@ struct CameraController {
         // Gesture-relative orientation: final pose depends on total drag from
         // ACTION_DOWN, not the number or timing of MotionEvent samples.
         dyaw=orbitBaseYaw-totalDx/std::max(width,1.0f)*2.35f;
-        dpitch=std::clamp(orbitBasePitch-totalDy/std::max(height,1.0f)*2.15f,-1.48f,1.48f);
+        dpitch=std::clamp(orbitBasePitch+totalDy/std::max(height,1.0f)*2.15f,-1.48f,1.48f);
     }
     void endOrbit() { orbitActive=false; }
     void zoom(float scale) {
-        if (std::isfinite(scale)&&scale>0.01f) ddistance=std::clamp(ddistance/scale,0.35f,16.0f);
+        if (std::isfinite(scale)&&scale>0.01f) {
+            ddistance=std::clamp(ddistance/scale,0.35f,16.0f);
+            // Pinch input is already filtered in Kotlin. Applying a second
+            // distance interpolator creates a rubber-band lag after release.
+            distance=ddistance;
+        }
     }
     void pan(float dx,float dy) {
         float u=ddistance*1.45f/std::max(height,1.0f);
