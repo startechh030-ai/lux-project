@@ -67,8 +67,8 @@ struct CameraController {
         if (!orbitActive) return;
         // Gesture-relative orientation: final pose depends on total drag from
         // ACTION_DOWN, not the number or timing of MotionEvent samples.
-        dyaw=orbitBaseYaw+totalDx/std::max(width,1.0f)*2.35f;
-        dpitch=std::clamp(orbitBasePitch+totalDy/std::max(height,1.0f)*2.15f,-1.48f,1.48f);
+        dyaw=orbitBaseYaw-totalDx/std::max(width,1.0f)*2.35f;
+        dpitch=std::clamp(orbitBasePitch-totalDy/std::max(height,1.0f)*2.15f,-1.48f,1.48f);
     }
     void endOrbit() { orbitActive=false; }
     void zoom(float scale) {

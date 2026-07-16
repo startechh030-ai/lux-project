@@ -124,6 +124,7 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
             status.text = "LOADING  •  $name"
             // Empty-scene gestures must never alter the next model's pivot.
             cameraInput.inputEnabled = false
+            cameraInput.clearPivotFeedback()
             nativeCamera.nativeReset()
             val fileSize = selectedFileSize(uri)
             val safeLimit = safeGlbImportLimit()
@@ -168,16 +169,21 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
         viewer.view.pick(screenX.toInt(), pickY, mainHandler) { result ->
             if (result.renderable == 0) {
                 nativeCamera.nativeQueuePivot(0f, 0f, 0f)
+                cameraInput.clearPivotFeedback()
                 return@pick
             }
             val world = unproject(result.fragCoords[0], result.fragCoords[1], result.depth)
             if (world != null && isValidNormalizedPivot(world)) {
                 nativeCamera.nativeQueuePivot(world[0], world[1], world[2])
+                cameraInput.showPivotFeedback(
+                    result.fragCoords[0], surface.height-result.fragCoords[1]
+                )
                 status.text = "MESH PIVOT  •  READY"
             } else {
                 // A malformed depth result must never pull the camera away
                 // from the normalized model. Fall back to its true center.
                 nativeCamera.nativeQueuePivot(0f, 0f, 0f)
+                cameraInput.clearPivotFeedback()
                 status.text = "MODEL PIVOT  •  READY"
             }
         }

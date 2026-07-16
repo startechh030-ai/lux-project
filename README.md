@@ -132,3 +132,7 @@ Picking depth is now supplied directly to Filament's inverse projection path ins
 ## Phase 3A clean gesture fix — 0.5.4
 
 GPU pick results are queued as a pending pivot and committed only at the beginning of the next orbit stroke. The active pivot is immutable for the full gesture. Orbit orientation is calculated from total displacement relative to ACTION_DOWN and the saved starting orientation, so the final angle no longer depends on MotionEvent sample count or timing. Pointer handoff starts a new clean orbit baseline. Pivot rebasing remains eye-preserving and guarded by normalized bounds.
+
+## Phase 3A direction and touch filtering — 0.5.6
+
+Horizontal and vertical orbit signs were reversed to match the requested swipe direction. Two-finger centroid and separation now use independent low-pass input filtering before native pan and zoom, with no confidence dead zone. Valid GPU picks briefly display an ice-blue ring at the actual picked screen location; empty or rejected picks clear it. Pivot feedback is also cleared on every import.
