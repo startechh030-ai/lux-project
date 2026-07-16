@@ -10,12 +10,16 @@ struct CameraController {
     float dyaw=0, dpitch=0, ddistance=3.8f;
     float tx=0, ty=0, tz=0, dtx=0, dty=0, dtz=0;
     float width=1, height=1;
+    float orbitBaseYaw=0, orbitBasePitch=0;
+    float pendingX=0, pendingY=0, pendingZ=0;
+    bool pendingPivot=false, orbitActive=false;
     double lastTime=0;
     std::mutex mutex;
 
     void reset() {
         yaw=dyaw=0; pitch=dpitch=0; distance=ddistance=3.8f;
-        tx=dtx=ty=dty=tz=dtz=0; lastTime=0;
+        tx=dtx=ty=dty=tz=dtz=0;
+        pendingPivot=false; orbitActive=false; lastTime=0;
     }
     void setPivot(float x,float y,float z) {
         if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z)) x=y=z=0;
@@ -47,11 +51,26 @@ struct CameraController {
         rebase(currentEyeX,currentEyeY,currentEyeZ,x,y,z,yaw,pitch,distance);
         rebase(desiredEyeX,desiredEyeY,desiredEyeZ,x,y,z,dyaw,dpitch,ddistance);
     }
-    void orbit(float dx,float dy) {
-        // Content follows the artist's finger, matching mobile sculpting apps.
-        dyaw += dx/std::max(width,1.0f)*2.35f;
-        dpitch=std::clamp(dpitch+dy/std::max(height,1.0f)*2.15f,-1.48f,1.48f);
+    void queuePivot(float x,float y,float z) {
+        pendingX=x; pendingY=y; pendingZ=z; pendingPivot=true;
     }
+    void beginOrbit() {
+        // A GPU pick from the previous stroke is committed only at this clean
+        // gesture boundary. The active pivot never changes mid-stroke.
+        if (pendingPivot) {
+            setPivot(pendingX,pendingY,pendingZ);
+            pendingPivot=false;
+        }
+        orbitBaseYaw=dyaw; orbitBasePitch=dpitch; orbitActive=true;
+    }
+    void orbitTo(float totalDx,float totalDy) {
+        if (!orbitActive) return;
+        // Gesture-relative orientation: final pose depends on total drag from
+        // ACTION_DOWN, not the number or timing of MotionEvent samples.
+        dyaw=orbitBaseYaw+totalDx/std::max(width,1.0f)*2.35f;
+        dpitch=std::clamp(orbitBasePitch+totalDy/std::max(height,1.0f)*2.15f,-1.48f,1.48f);
+    }
+    void endOrbit() { orbitActive=false; }
     void zoom(float scale) {
         if (std::isfinite(scale)&&scale>0.01f) ddistance=std::clamp(ddistance/scale,0.35f,16.0f);
     }
@@ -75,10 +94,12 @@ struct CameraController {
 }
 #define LOCK std::lock_guard<std::mutex> l(c.mutex)
 extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativeSetViewport(JNIEnv*,jobject,jint w,jint h){LOCK;c.width=w;c.height=h;}
-extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativeOrbit(JNIEnv*,jobject,jfloat x,jfloat y){LOCK;c.orbit(x,y);}
+extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativeBeginOrbit(JNIEnv*,jobject){LOCK;c.beginOrbit();}
+extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativeOrbitTo(JNIEnv*,jobject,jfloat x,jfloat y){LOCK;c.orbitTo(x,y);}
+extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativeEndOrbit(JNIEnv*,jobject){LOCK;c.endOrbit();}
 extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativeZoom(JNIEnv*,jobject,jfloat s){LOCK;c.zoom(s);}
 extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativePan(JNIEnv*,jobject,jfloat x,jfloat y){LOCK;c.pan(x,y);}
-extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativeSetPivot(JNIEnv*,jobject,jfloat x,jfloat y,jfloat z){LOCK;c.setPivot(x,y,z);}
+extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativeQueuePivot(JNIEnv*,jobject,jfloat x,jfloat y,jfloat z){LOCK;c.queuePivot(x,y,z);}
 extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativeReset(JNIEnv*,jobject){LOCK;c.reset();}
 extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativeUpdate(JNIEnv* e,jobject,jdouble t,jfloatArray out){
     LOCK; c.update(t); auto p=c.pose();

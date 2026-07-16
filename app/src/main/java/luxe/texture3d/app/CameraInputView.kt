@@ -13,6 +13,7 @@ class CameraInputView(context: Context) : View(context) {
     var onGesture: ((String) -> Unit)? = null
 
     private var lastX=0f; private var lastY=0f; private var lastSpan=0f
+    private var orbitStartX=0f; private var orbitStartY=0f
     private var count=0
     private var reportedGesture=""
 
@@ -27,13 +28,18 @@ class CameraInputView(context: Context) : View(context) {
         if (!inputEnabled || !::camera.isInitialized) return true
         when(e.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                count=1; lastX=e.x; lastY=e.y; reportedGesture=""
+                count=1; lastX=e.x; lastY=e.y
+                orbitStartX=e.x; orbitStartY=e.y; reportedGesture=""
+                camera.nativeBeginOrbit()
                 onOrbitTouch?.invoke(e.x,e.y)
             }
-            MotionEvent.ACTION_POINTER_DOWN -> { baseline(e) }
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                camera.nativeEndOrbit()
+                baseline(e)
+            }
             MotionEvent.ACTION_MOVE -> {
                 if(e.pointerCount==1 && count==1) {
-                    camera.nativeOrbit(e.x-lastX,e.y-lastY); report("ORBIT")
+                    camera.nativeOrbitTo(e.x-orbitStartX,e.y-orbitStartY); report("ORBIT")
                     lastX=e.x;lastY=e.y
                 } else if(e.pointerCount>=2) {
                     val x=midX(e);val y=midY(e);val s=span(e)
@@ -49,11 +55,15 @@ class CameraInputView(context: Context) : View(context) {
                 if (e.pointerCount - 1 == 1) {
                     val remaining = if (e.actionIndex == 0) 1 else 0
                     count = 1
-                    lastX = e.getX(remaining)
-                    lastY = e.getY(remaining)
+                    lastX = e.getX(remaining); lastY = e.getY(remaining)
+                    orbitStartX=lastX; orbitStartY=lastY
+                    camera.nativeBeginOrbit()
                 } else count = 0
             }
-            MotionEvent.ACTION_UP,MotionEvent.ACTION_CANCEL -> count=0
+            MotionEvent.ACTION_UP,MotionEvent.ACTION_CANCEL -> {
+                camera.nativeEndOrbit()
+                count=0
+            }
         }
         return true
     }

@@ -2,10 +2,12 @@ package luxe.texture3d.app
 
 class NativeCamera {
     external fun nativeSetViewport(width: Int, height: Int)
-    external fun nativeOrbit(dx: Float, dy: Float)
+    external fun nativeBeginOrbit()
+    external fun nativeOrbitTo(totalDx: Float, totalDy: Float)
+    external fun nativeEndOrbit()
     external fun nativeZoom(scaleFactor: Float)
     external fun nativePan(dx: Float, dy: Float)
-    external fun nativeSetPivot(x: Float, y: Float, z: Float)
+    external fun nativeQueuePivot(x: Float, y: Float, z: Float)
     external fun nativeReset()
     external fun nativeUpdate(seconds: Double, outputPose: FloatArray)
     companion object { init { System.loadLibrary("luxe_camera") } }

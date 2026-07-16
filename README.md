@@ -128,3 +128,7 @@ Picking depth is now supplied directly to Filament's inverse projection path ins
 - JNI fills one lifetime `FloatArray(9)` rather than allocating a new array every rendered frame;
 - gesture status text updates only when gesture mode changes, not on every MotionEvent;
 - native bounds checks and depth validation remain active.
+
+## Phase 3A clean gesture fix — 0.5.4
+
+GPU pick results are queued as a pending pivot and committed only at the beginning of the next orbit stroke. The active pivot is immutable for the full gesture. Orbit orientation is calculated from total displacement relative to ACTION_DOWN and the saved starting orientation, so the final angle no longer depends on MotionEvent sample count or timing. Pointer handoff starts a new clean orbit baseline. Pivot rebasing remains eye-preserving and guarded by normalized bounds.

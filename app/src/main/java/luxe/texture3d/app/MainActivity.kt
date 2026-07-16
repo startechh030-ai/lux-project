@@ -167,18 +167,18 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
         val pickY = surface.height - screenY.toInt()
         viewer.view.pick(screenX.toInt(), pickY, mainHandler) { result ->
             if (result.renderable == 0) {
-                nativeCamera.nativeSetPivot(0f, 0f, 0f)
+                nativeCamera.nativeQueuePivot(0f, 0f, 0f)
                 return@pick
             }
             val world = unproject(result.fragCoords[0], result.fragCoords[1], result.depth)
             if (world != null && isValidNormalizedPivot(world)) {
-                nativeCamera.nativeSetPivot(world[0], world[1], world[2])
-                status.text = "MESH PIVOT  •  ACTIVE"
+                nativeCamera.nativeQueuePivot(world[0], world[1], world[2])
+                status.text = "MESH PIVOT  •  READY"
             } else {
                 // A malformed depth result must never pull the camera away
                 // from the normalized model. Fall back to its true center.
-                nativeCamera.nativeSetPivot(0f, 0f, 0f)
-                status.text = "MODEL PIVOT  •  CENTER"
+                nativeCamera.nativeQueuePivot(0f, 0f, 0f)
+                status.text = "MODEL PIVOT  •  READY"
             }
         }
     }
