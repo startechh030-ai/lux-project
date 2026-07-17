@@ -144,3 +144,7 @@ Horizontal and vertical orbit signs were reversed to match the requested swipe d
 - each GPU pick captures its inverse view-projection matrix and viewport at submission time, so asynchronous depth is reconstructed against the correct camera frame;
 - pan and pinch use separate response filters;
 - pinch distance is applied immediately after filtered input, removing the second native interpolation that caused rubber-band lag.
+
+## Phase 3A rigid mesh-grab camera — 0.6.0
+
+The camera no longer uses the orbit pivot as its forced look-at target. C++ stores eye, forward, up, and pivot independently. Committing a mesh pivot changes no visible camera component. Orbit applies the same rigid rotations to eye offset, forward, and up around the picked surface point, keeping the touched point visually anchored instead of snapping it to screen center. Zoom scales eye-to-pivot distance with raw bounded pinch ratios and no span or distance lag. Pan translates eye and pivot together.

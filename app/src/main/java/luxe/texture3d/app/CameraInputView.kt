@@ -15,12 +15,11 @@ class CameraInputView(context: Context) : View(context) {
     var onGesture: ((String) -> Unit)? = null
 
     private var lastX=0f; private var lastY=0f; private var lastSpan=0f
-    private var filteredX=0f; private var filteredY=0f; private var filteredSpan=0f
+    private var filteredX=0f; private var filteredY=0f
     private var orbitStartX=0f; private var orbitStartY=0f
     private var count=0
     private var reportedGesture=""
     private val panFilter=0.58f
-    private val zoomFilter=0.78f
 
     private var pivotX=0f; private var pivotY=0f; private var pivotVisible=false
     private val pivotPaint=Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -79,11 +78,10 @@ class CameraInputView(context: Context) : View(context) {
                     if(count==e.pointerCount) {
                         filteredX+=(rawX-filteredX)*panFilter
                         filteredY+=(rawY-filteredY)*panFilter
-                        filteredSpan+=(rawSpan-filteredSpan)*zoomFilter
                         camera.nativePan(filteredX-lastX,filteredY-lastY)
-                        if(lastSpan>1f&&filteredSpan>1f) camera.nativeZoom(filteredSpan/lastSpan)
+                        if(lastSpan>1f&&rawSpan>1f) camera.nativeZoom(rawSpan/lastSpan)
                         report("PAN / ZOOM")
-                        lastX=filteredX;lastY=filteredY;lastSpan=filteredSpan
+                        lastX=filteredX;lastY=filteredY;lastSpan=rawSpan
                     } else baseline(e)
                     count=e.pointerCount
                 }
@@ -103,8 +101,8 @@ class CameraInputView(context: Context) : View(context) {
     }
     private fun baseline(e:MotionEvent) {
         count=e.pointerCount
-        filteredX=midX(e);filteredY=midY(e);filteredSpan=span(e)
-        lastX=filteredX;lastY=filteredY;lastSpan=filteredSpan
+        filteredX=midX(e);filteredY=midY(e)
+        lastX=filteredX;lastY=filteredY;lastSpan=span(e)
     }
     private fun midX(e:MotionEvent)=(e.getX(0)+e.getX(1))*0.5f
     private fun midY(e:MotionEvent)=(e.getY(0)+e.getY(1))*0.5f
