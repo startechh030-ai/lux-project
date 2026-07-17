@@ -11,14 +11,18 @@ import kotlin.math.hypot
 class CameraInputView(context: Context) : View(context) {
     lateinit var camera: NativeCamera
     var inputEnabled = false
-    var onOrbitTouch: ((Float, Float) -> Unit)? = null
+    var onDoubleTap: ((Float, Float) -> Unit)? = null
     var onGesture: ((String) -> Unit)? = null
 
     private var lastX=0f; private var lastY=0f; private var lastSpan=0f
     private var filteredX=0f; private var filteredY=0f
     private var orbitStartX=0f; private var orbitStartY=0f
+    private var pinchStartSpan=0f
     private var count=0
     private var reportedGesture=""
+    private var moved=false
+    private var lastTapTime=0L
+    private val tapSlop=12f*resources.displayMetrics.density
     private val panFilter=0.58f
 
     private var pivotX=0f; private var pivotY=0f; private var pivotVisible=false
@@ -62,14 +66,15 @@ class CameraInputView(context: Context) : View(context) {
         when(e.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 count=1; lastX=e.x; lastY=e.y
-                orbitStartX=e.x; orbitStartY=e.y; reportedGesture=""
+                orbitStartX=e.x; orbitStartY=e.y; reportedGesture=""; moved=false
                 camera.nativeBeginOrbit()
-                onOrbitTouch?.invoke(e.x,e.y)
             }
             MotionEvent.ACTION_POINTER_DOWN -> {
-                camera.nativeEndOrbit(); baseline(e)
+                moved=true; camera.nativeEndOrbit(); baseline(e)
+                pinchStartSpan=span(e); camera.nativeBeginPinch()
             }
             MotionEvent.ACTION_MOVE -> {
+                if(hypot(e.x-orbitStartX,e.y-orbitStartY)>tapSlop) moved=true
                 if(e.pointerCount==1 && count==1) {
                     camera.nativeOrbitTo(e.x-orbitStartX,e.y-orbitStartY)
                     report("ORBIT"); lastX=e.x;lastY=e.y
@@ -79,7 +84,7 @@ class CameraInputView(context: Context) : View(context) {
                         filteredX+=(rawX-filteredX)*panFilter
                         filteredY+=(rawY-filteredY)*panFilter
                         camera.nativePan(filteredX-lastX,filteredY-lastY)
-                        if(lastSpan>1f&&rawSpan>1f) camera.nativeZoom(rawSpan/lastSpan)
+                        if(pinchStartSpan>1f&&rawSpan>1f) camera.nativeZoomTo(rawSpan/pinchStartSpan)
                         report("PAN / ZOOM")
                         lastX=filteredX;lastY=filteredY;lastSpan=rawSpan
                     } else baseline(e)
@@ -87,18 +92,29 @@ class CameraInputView(context: Context) : View(context) {
                 }
             }
             MotionEvent.ACTION_POINTER_UP -> {
+                camera.nativeEndPinch()
                 if (e.pointerCount-1==1) {
                     val remaining=if(e.actionIndex==0) 1 else 0
                     count=1; lastX=e.getX(remaining);lastY=e.getY(remaining)
                     orbitStartX=lastX;orbitStartY=lastY;camera.nativeBeginOrbit()
                 } else count=0
             }
-            MotionEvent.ACTION_UP,MotionEvent.ACTION_CANCEL -> {
-                camera.nativeEndOrbit();count=0
+            MotionEvent.ACTION_UP -> {
+                camera.nativeEndOrbit();camera.nativeEndPinch();count=0
+                if(!moved) {
+                    val now=e.eventTime
+                    if(now-lastTapTime in 1..350) { onDoubleTap?.invoke(e.x,e.y);lastTapTime=0L }
+                    else lastTapTime=now
+                    performClick()
+                }
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                camera.nativeEndOrbit();camera.nativeEndPinch();count=0
             }
         }
         return true
     }
+    override fun performClick():Boolean { super.performClick();return true }
     private fun baseline(e:MotionEvent) {
         count=e.pointerCount
         filteredX=midX(e);filteredY=midY(e)

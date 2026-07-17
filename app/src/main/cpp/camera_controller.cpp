@@ -23,14 +23,15 @@ struct CameraController {
     V dEye{0,0,3.8f}, dForward{0,0,-1}, dUp{0,1,0};
     V pivot{0,0,0}, pending{0,0,0};
     V startEye{},startForward{},startUp{},startPivot{};
+    V pinchStartOffset{0,0,3.8f};
     float width=1,height=1;
-    bool pendingPivot=false,orbitActive=false;
+    bool pendingPivot=false,orbitActive=false,pinchActive=false;
     double lastTime=0;
     std::mutex mutex;
 
     void reset(){
         eye=dEye={0,0,3.8f}; forward=dForward={0,0,-1}; up=dUp={0,1,0};
-        pivot=pending={0,0,0}; pendingPivot=false;orbitActive=false;lastTime=0;
+        pivot=pending={0,0,0}; pendingPivot=false;orbitActive=false;pinchActive=false;lastTime=0;
     }
     V safePivot(float x,float y,float z){
         if(!std::isfinite(x)||!std::isfinite(y)||!std::isfinite(z)) return {0,0,0};
@@ -57,15 +58,17 @@ struct CameraController {
         dEye=add(startPivot,offset);dForward=norm(f);dUp=norm(u);
     }
     void endOrbit(){orbitActive=false;}
-    void zoom(float scale){
-        if(!std::isfinite(scale)||scale<=0.01f)return;
-        // Raw pinch ratio is bounded per event, not delayed by a low-pass filter.
-        scale=std::clamp(scale,0.88f,1.12f);
-        V offset=sub(dEye,pivot);float old=len(offset);
-        float next=std::clamp(old/scale,0.35f,16.f);
-        if(old>1e-6f)dEye=add(pivot,mul(offset,next/old));
-        eye=dEye; // no rubber-band catch-up after fingers stop
+    void beginPinch(){pinchStartOffset=sub(dEye,pivot);pinchActive=true;}
+    void zoomTo(float totalScale){
+        if(!pinchActive||!std::isfinite(totalScale)||totalScale<=0.05f)return;
+        totalScale=std::clamp(totalScale,0.08f,12.0f);
+        float start=len(pinchStartOffset);
+        float next=std::clamp(start/totalScale,0.35f,16.f);
+        if(start>1e-6f)dEye=add(pivot,mul(pinchStartOffset,next/start));
+        eye=dEye;
     }
+    void endPinch(){pinchActive=false;}
+    void zoom(float scale){beginPinch();zoomTo(scale);endPinch();}
     void pan(float dx,float dy){
         float distance=len(sub(dEye,pivot));float units=distance*1.45f/std::max(height,1.f);
         V right=norm(cross(dForward,dUp));
@@ -92,6 +95,9 @@ extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativeBeg
 extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativeOrbitTo(JNIEnv*,jobject,jfloat x,jfloat y){LOCK;c.orbitTo(x,y);}
 extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativeOrbit(JNIEnv*,jobject,jfloat x,jfloat y){LOCK;c.beginOrbit();c.orbitTo(x,y);c.endOrbit();}
 extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativeEndOrbit(JNIEnv*,jobject){LOCK;c.endOrbit();}
+extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativeBeginPinch(JNIEnv*,jobject){LOCK;c.beginPinch();}
+extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativeZoomTo(JNIEnv*,jobject,jfloat s){LOCK;c.zoomTo(s);}
+extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativeEndPinch(JNIEnv*,jobject){LOCK;c.endPinch();}
 extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativeZoom(JNIEnv*,jobject,jfloat s){LOCK;c.zoom(s);}
 extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativePan(JNIEnv*,jobject,jfloat x,jfloat y){LOCK;c.pan(x,y);}
 extern "C" JNIEXPORT void JNICALL Java_luxe_texture3d_app_NativeCamera_nativeQueuePivot(JNIEnv*,jobject,jfloat x,jfloat y,jfloat z){LOCK;c.queuePivot(x,y,z);}

@@ -148,3 +148,7 @@ Horizontal and vertical orbit signs were reversed to match the requested swipe d
 ## Phase 3A rigid mesh-grab camera — 0.6.0
 
 The camera no longer uses the orbit pivot as its forced look-at target. C++ stores eye, forward, up, and pivot independently. Committing a mesh pivot changes no visible camera component. Orbit applies the same rigid rotations to eye offset, forward, and up around the picked surface point, keeping the touched point visually anchored instead of snapping it to screen center. Zoom scales eye-to-pivot distance with raw bounded pinch ratios and no span or distance lag. Pan translates eye and pivot together.
+
+## Phase B camera interaction foundation — 0.7.0
+
+Ordinary orbit no longer submits mesh picks. Double-tap mesh queues an exact validated surface pivot; double-tap background or an invalid hit performs a complete upright home reset. Pinch zoom is gesture-relative: native C++ snapshots eye-to-pivot offset at pointer-down and derives distance from total current/start span, eliminating accumulated ratio drift and restoring reliable zoom-out. Pan can continue during pinch because zoom uses the translated current pivot. Rigid pivot/view separation from 0.6.0 remains active.

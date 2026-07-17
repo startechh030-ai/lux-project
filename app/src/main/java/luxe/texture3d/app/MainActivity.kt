@@ -61,7 +61,7 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
         cameraInput = CameraInputView(this).apply {
             camera = nativeCamera
             onGesture = { gesture -> status.text = "CAMERA INPUT  •  $gesture" }
-            onOrbitTouch = { x, y -> pickPivot(x, y) }
+            onDoubleTap = { x, y -> pickPivot(x, y) }
         }
         root.addView(cameraInput, FrameLayout.LayoutParams(-1, -1))
 
@@ -179,8 +179,9 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
 
         viewer.view.pick(screenX.toInt(), pickY, mainHandler) { result ->
             if (result.renderable == 0) {
-                nativeCamera.nativeQueuePivot(0f, 0f, 0f)
+                nativeCamera.nativeReset()
                 cameraInput.clearPivotFeedback()
+                status.text = "HOME VIEW  •  CENTERED"
                 return@pick
             }
             val world = unproject(
@@ -195,9 +196,9 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
                 )
                 status.text = "MESH PIVOT  •  READY"
             } else {
-                nativeCamera.nativeQueuePivot(0f, 0f, 0f)
+                nativeCamera.nativeReset()
                 cameraInput.clearPivotFeedback()
-                status.text = "MODEL PIVOT  •  READY"
+                status.text = "HOME VIEW  •  CENTERED"
             }
         }
     }
