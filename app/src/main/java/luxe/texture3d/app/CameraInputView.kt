@@ -1,129 +1,185 @@
 package luxe.texture3d.app
 
 import android.content.Context
-import android.graphics.Canvas
-import android.graphics.Paint
 import android.view.MotionEvent
 import android.view.View
+import com.google.android.filament.utils.Manipulator
+import kotlin.math.abs
 import kotlin.math.hypot
 
-/** Touch input for the Luxe C++ camera. No Filament Manipulator is involved. */
+/** Low-latency touch adapter for Filament's native orbit Manipulator. */
 class CameraInputView(context: Context) : View(context) {
-    lateinit var camera: NativeCamera
-    var inputEnabled = false
-    var onDoubleTap: ((Float, Float) -> Unit)? = null
+    lateinit var manipulator: Manipulator
     var onGesture: ((String) -> Unit)? = null
+    var inputEnabled: Boolean = false
 
-    private var lastX=0f; private var lastY=0f; private var lastSpan=0f
-    private var filteredX=0f; private var filteredY=0f
-    private var orbitStartX=0f; private var orbitStartY=0f
-    private var pinchStartSpan=0f
-    private var count=0
-    private var reportedGesture=""
-    private var moved=false
-    private var lastTapTime=0L
-    private val tapSlop=12f*resources.displayMetrics.density
-    private val panFilter=0.58f
+    private enum class TwoFingerMode { NONE, UNDECIDED, PAN, ZOOM }
 
-    private var pivotX=0f; private var pivotY=0f; private var pivotVisible=false
-    private val pivotPaint=Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color=0xff38bdf8.toInt(); style=Paint.Style.STROKE
-        strokeWidth=resources.displayMetrics.density*1.5f
-    }
-    private val pivotFillPaint=Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color=0xff38bdf8.toInt(); style=Paint.Style.FILL
-    }
-    private val hidePivot=Runnable { pivotVisible=false; invalidate() }
+    private var activePointers = 0
+    private var twoFingerMode = TwoFingerMode.NONE
+    private var initialMidX = 0f
+    private var initialMidY = 0f
+    private var initialSpan = 0f
+    private var previousSpan = 0f
+    private var downX = 0f
+    private var downY = 0f
+    private var moved = false
+    private var lastTapTime = 0L
+    private var reportedGesture = ""
+
+    private val tapSlop = 12f * resources.displayMetrics.density
+    private val intentThreshold = 0.75f * resources.displayMetrics.density
+    private val zoomBias = 1.15f
+    private val zoomScale = 0.1f
 
     init {
-        isClickable=true
+        isClickable = true
+        isFocusable = true
         setBackgroundColor(android.graphics.Color.TRANSPARENT)
-        setWillNotDraw(false)
     }
 
-    fun showPivotFeedback(x:Float,y:Float) {
-        pivotX=x; pivotY=y; pivotVisible=true
-        removeCallbacks(hidePivot); postDelayed(hidePivot,900L); invalidate()
-    }
-    fun clearPivotFeedback() { removeCallbacks(hidePivot); pivotVisible=false; invalidate() }
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (!inputEnabled || !::manipulator.isInitialized) return true
+        parent?.requestDisallowInterceptTouchEvent(true)
 
-    override fun onDraw(canvas:Canvas) {
-        super.onDraw(canvas)
-        if(pivotVisible) {
-            val r=resources.displayMetrics.density*5f
-            canvas.drawCircle(pivotX,pivotY,r,pivotPaint)
-            canvas.drawCircle(pivotX,pivotY,resources.displayMetrics.density*1.2f,pivotFillPaint)
-        }
-    }
-
-    override fun onSizeChanged(w:Int,h:Int,oldw:Int,oldh:Int) {
-        super.onSizeChanged(w,h,oldw,oldh)
-        if (::camera.isInitialized) camera.nativeSetViewport(w.coerceAtLeast(1),h.coerceAtLeast(1))
-    }
-
-    override fun onTouchEvent(e:MotionEvent):Boolean {
-        if (!inputEnabled || !::camera.isInitialized) return true
-        when(e.actionMasked) {
+        when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                count=1; lastX=e.x; lastY=e.y
-                orbitStartX=e.x; orbitStartY=e.y; reportedGesture=""; moved=false
-                camera.nativeBeginOrbit()
+                downX = event.x
+                downY = event.y
+                moved = false
+                reportedGesture = ""
+                activePointers = 1
+                twoFingerMode = TwoFingerMode.NONE
+                manipulator.grabBegin(event.x.toInt(), filamentY(event.y), false)
             }
+
             MotionEvent.ACTION_POINTER_DOWN -> {
-                moved=true; camera.nativeEndOrbit(); baseline(e)
-                pinchStartSpan=span(e); camera.nativeBeginPinch()
-            }
-            MotionEvent.ACTION_MOVE -> {
-                if(hypot(e.x-orbitStartX,e.y-orbitStartY)>tapSlop) moved=true
-                if(e.pointerCount==1 && count==1) {
-                    camera.nativeOrbitTo(e.x-orbitStartX,e.y-orbitStartY)
-                    report("ORBIT"); lastX=e.x;lastY=e.y
-                } else if(e.pointerCount>=2) {
-                    val rawX=midX(e); val rawY=midY(e); val rawSpan=span(e)
-                    if(count==e.pointerCount) {
-                        filteredX+=(rawX-filteredX)*panFilter
-                        filteredY+=(rawY-filteredY)*panFilter
-                        camera.nativePan(filteredX-lastX,filteredY-lastY)
-                        if(pinchStartSpan>1f&&rawSpan>1f) camera.nativeZoomTo(rawSpan/pinchStartSpan)
-                        report("PAN / ZOOM")
-                        lastX=filteredX;lastY=filteredY;lastSpan=rawSpan
-                    } else baseline(e)
-                    count=e.pointerCount
+                manipulator.grabEnd()
+                activePointers = event.pointerCount
+                if (activePointers >= 2) {
+                    initialMidX = midpointX(event)
+                    initialMidY = midpointY(event)
+                    initialSpan = span(event)
+                    previousSpan = initialSpan
+                    twoFingerMode = TwoFingerMode.UNDECIDED
                 }
             }
-            MotionEvent.ACTION_POINTER_UP -> {
-                camera.nativeEndPinch()
-                if (e.pointerCount-1==1) {
-                    val remaining=if(e.actionIndex==0) 1 else 0
-                    count=1; lastX=e.getX(remaining);lastY=e.getY(remaining)
-                    orbitStartX=lastX;orbitStartY=lastY;camera.nativeBeginOrbit()
-                } else count=0
+
+            MotionEvent.ACTION_MOVE -> {
+                if (hypot(event.x - downX, event.y - downY) > tapSlop) moved = true
+
+                if (event.pointerCount == 1 && activePointers == 1) {
+                    manipulator.grabUpdate(event.x.toInt(), filamentY(event.y))
+                    report("ORBIT")
+                } else if (event.pointerCount >= 2 && activePointers >= 2) {
+                    handleTwoFingerMove(event)
+                }
             }
+
+            MotionEvent.ACTION_POINTER_UP -> {
+                if (twoFingerMode == TwoFingerMode.PAN) manipulator.grabEnd()
+                activePointers = event.pointerCount - 1
+                twoFingerMode = TwoFingerMode.NONE
+                previousSpan = 0f
+
+                if (activePointers == 1) {
+                    val remaining = if (event.actionIndex == 0) 1 else 0
+                    manipulator.grabBegin(
+                        event.getX(remaining).toInt(),
+                        filamentY(event.getY(remaining)),
+                        false
+                    )
+                }
+            }
+
             MotionEvent.ACTION_UP -> {
-                camera.nativeEndOrbit();camera.nativeEndPinch();count=0
-                if(!moved) {
-                    val now=e.eventTime
-                    if(now-lastTapTime in 1..350) { onDoubleTap?.invoke(e.x,e.y);lastTapTime=0L }
-                    else lastTapTime=now
+                // Orbit and pan own a grab session; grabEnd is harmless after zoom.
+                manipulator.grabEnd()
+                activePointers = 0
+                twoFingerMode = TwoFingerMode.NONE
+                if (!moved) {
+                    val now = event.eventTime
+                    if (now - lastTapTime in 1..350) {
+                        report("DOUBLE TAP")
+                        lastTapTime = 0L
+                    } else lastTapTime = now
                     performClick()
                 }
             }
+
             MotionEvent.ACTION_CANCEL -> {
-                camera.nativeEndOrbit();camera.nativeEndPinch();count=0
+                manipulator.grabEnd()
+                activePointers = 0
+                twoFingerMode = TwoFingerMode.NONE
+                previousSpan = 0f
             }
         }
         return true
     }
-    override fun performClick():Boolean { super.performClick();return true }
-    private fun baseline(e:MotionEvent) {
-        count=e.pointerCount
-        filteredX=midX(e);filteredY=midY(e)
-        lastX=filteredX;lastY=filteredY;lastSpan=span(e)
+
+    private fun handleTwoFingerMove(event: MotionEvent) {
+        val midX = midpointX(event)
+        val midY = midpointY(event)
+        val currentSpan = span(event)
+
+        if (twoFingerMode == TwoFingerMode.UNDECIDED) {
+            val panTravel = hypot(midX - initialMidX, midY - initialMidY)
+            val zoomTravel = abs(currentSpan - initialSpan)
+
+            if (zoomTravel >= intentThreshold && zoomTravel > panTravel * zoomBias) {
+                twoFingerMode = TwoFingerMode.ZOOM
+                previousSpan = currentSpan
+                report("ZOOM")
+                return
+            }
+            if (panTravel >= intentThreshold) {
+                twoFingerMode = TwoFingerMode.PAN
+                manipulator.grabBegin(
+                    initialMidX.toInt(), filamentY(initialMidY), true
+                )
+                manipulator.grabUpdate(midX.toInt(), filamentY(midY))
+                report("PAN")
+                return
+            }
+            return
+        }
+
+        when (twoFingerMode) {
+            TwoFingerMode.PAN -> {
+                manipulator.grabUpdate(midX.toInt(), filamentY(midY))
+                report("PAN")
+            }
+            TwoFingerMode.ZOOM -> {
+                val delta = previousSpan - currentSpan
+                if (abs(delta) >= 0.15f) {
+                    manipulator.scroll(
+                        midX.toInt(), filamentY(midY), delta * zoomScale
+                    )
+                }
+                previousSpan = currentSpan
+                report("ZOOM")
+            }
+            else -> Unit
+        }
     }
-    private fun midX(e:MotionEvent)=(e.getX(0)+e.getX(1))*0.5f
-    private fun midY(e:MotionEvent)=(e.getY(0)+e.getY(1))*0.5f
-    private fun span(e:MotionEvent)=hypot(e.getX(1)-e.getX(0),e.getY(1)-e.getY(0))
-    private fun report(name:String) {
-        if(reportedGesture!=name) { reportedGesture=name;onGesture?.invoke(name) }
+
+    override fun performClick(): Boolean {
+        super.performClick()
+        return true
+    }
+
+    private fun filamentY(androidY: Float) = (height - androidY).toInt()
+    private fun midpointX(event: MotionEvent) = (event.getX(0) + event.getX(1)) * 0.5f
+    private fun midpointY(event: MotionEvent) = (event.getY(0) + event.getY(1)) * 0.5f
+    private fun span(event: MotionEvent) = hypot(
+        event.getX(1) - event.getX(0),
+        event.getY(1) - event.getY(0)
+    )
+
+    private fun report(name: String) {
+        if (reportedGesture != name) {
+            reportedGesture = name
+            onGesture?.invoke(name)
+        }
     }
 }

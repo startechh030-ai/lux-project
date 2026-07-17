@@ -4,9 +4,6 @@ import androidx.appcompat.app.AppCompatActivity
 import android.app.ActivityManager
 import android.net.Uri
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
-import android.opengl.Matrix
 import android.provider.OpenableColumns
 import android.view.Choreographer
 import android.view.Gravity
@@ -20,19 +17,18 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import com.google.android.filament.Skybox
 import com.google.android.filament.utils.KTX1Loader
+import com.google.android.filament.utils.Manipulator
+import com.google.android.filament.utils.ModelViewer
 import com.google.android.filament.utils.Utils
 import java.io.FileInputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import kotlin.math.abs
 
 class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
     private lateinit var surface: SurfaceView
     private lateinit var cameraInput: CameraInputView
-    private lateinit var viewer: LuxeModelViewer
-    private val nativeCamera = NativeCamera()
-    private val cameraPose = FloatArray(9)
-    private val mainHandler = Handler(Looper.getMainLooper())
+    private lateinit var viewer: ModelViewer
+    private lateinit var manipulator: Manipulator
     private lateinit var status: TextView
     private var solidSkybox: Skybox? = null
     private var rendering = false
@@ -59,9 +55,7 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
         // A normal transparent View captures input above the hardware-backed
         // SurfaceView. This avoids device-specific SurfaceView touch failures.
         cameraInput = CameraInputView(this).apply {
-            camera = nativeCamera
             onGesture = { gesture -> status.text = "CAMERA INPUT  •  $gesture" }
-            onDoubleTap = { x, y -> pickPivot(x, y) }
         }
         root.addView(cameraInput, FrameLayout.LayoutParams(-1, -1))
 
@@ -89,11 +83,18 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
         setContentView(root)
         applyImmersiveMode()
 
-        // Forked viewer keeps Filament loading/rendering but never overwrites
-        // the camera pose supplied by the Luxe C++ controller.
-        viewer = LuxeModelViewer(surface)
-        nativeCamera.nativeSetViewport(surface.width.coerceAtLeast(1), surface.height.coerceAtLeast(1))
-        nativeCamera.nativeReset()
+        // One Filament-native camera owner, with our low-latency touch adapter.
+        manipulator = Manipulator.Builder()
+            .targetPosition(0f, 0f, -4f)
+            .orbitHomePosition(0f, 0f, 1f)
+            // Filament defaults to 0.01. A lower value gives the deliberate,
+            // weighted response expected from a mobile sculpting viewport.
+            .orbitSpeed(0.0035f, 0.0035f)
+            .zoomSpeed(0.01f)
+            .viewport(surface.width.coerceAtLeast(1), surface.height.coerceAtLeast(1))
+            .build(Manipulator.Mode.ORBIT)
+        cameraInput.manipulator = manipulator
+        viewer = ModelViewer(surface, manipulator = manipulator)
         loadEnvironment()
     }
 
@@ -124,8 +125,8 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
             status.text = "LOADING  •  $name"
             // Empty-scene gestures must never alter the next model's pivot.
             cameraInput.inputEnabled = false
-            cameraInput.clearPivotFeedback()
-            nativeCamera.nativeReset()
+            manipulator.grabEnd()
+            manipulator.jumpToBookmark(manipulator.homeBookmark)
             val fileSize = selectedFileSize(uri)
             val safeLimit = safeGlbImportLimit()
             if (fileSize <= 0L) {
@@ -142,9 +143,11 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
             val buffer = readDirectBuffer(uri, fileSize)
             viewer.loadModelGlb(buffer)
             if (viewer.asset == null) throw IllegalArgumentException("Filament could not parse this GLB")
-            // Native camera and normalized model share the world origin.
-            viewer.transformToUnitCube(com.google.android.filament.utils.Float3(0f, 0f, 0f))
-            nativeCamera.nativeReset()
+            // ModelViewer's default placement (centered at z = -4) matches
+            // its native manipulator and gives consistent initial framing.
+            viewer.transformToUnitCube()
+            // Every import starts from the exact home target and orientation.
+            manipulator.jumpToBookmark(manipulator.homeBookmark)
             cameraInput.inputEnabled = true
             status.text = "$name  •  ORBIT VIEW"
         } catch (_: OutOfMemoryError) {
@@ -161,83 +164,6 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
             status.text = if (viewer.asset != null) "PREVIOUS MODEL ACTIVE" else "NO MODEL LOADED"
             Toast.makeText(this, e.message ?: "Could not load GLB", Toast.LENGTH_LONG).show()
         }
-    }
-
-    private fun pickPivot(screenX: Float, screenY: Float) {
-        if (viewer.asset == null || surface.width <= 0 || surface.height <= 0) return
-
-        // GPU picking is asynchronous. Snapshot the exact camera transform and
-        // viewport used when the query is submitted; never mix returned depth
-        // with matrices from a later, already-rotated frame.
-        val inverseViewProjection = captureInverseViewProjection() ?: return
-        val viewport = viewer.view.viewport
-        val viewportLeft = viewport.left
-        val viewportBottom = viewport.bottom
-        val viewportWidth = viewport.width
-        val viewportHeight = viewport.height
-        val pickY = surface.height - screenY.toInt()
-
-        viewer.view.pick(screenX.toInt(), pickY, mainHandler) { result ->
-            if (result.renderable == 0) {
-                nativeCamera.nativeReset()
-                cameraInput.clearPivotFeedback()
-                status.text = "HOME VIEW  •  CENTERED"
-                return@pick
-            }
-            val world = unproject(
-                result.fragCoords[0], result.fragCoords[1], result.depth,
-                inverseViewProjection, viewportLeft, viewportBottom,
-                viewportWidth, viewportHeight
-            )
-            if (world != null && isValidNormalizedPivot(world)) {
-                nativeCamera.nativeQueuePivot(world[0], world[1], world[2])
-                cameraInput.showPivotFeedback(
-                    result.fragCoords[0], surface.height-result.fragCoords[1]
-                )
-                status.text = "MESH PIVOT  •  READY"
-            } else {
-                nativeCamera.nativeReset()
-                cameraInput.clearPivotFeedback()
-                status.text = "HOME VIEW  •  CENTERED"
-            }
-        }
-    }
-
-    private fun captureInverseViewProjection(): FloatArray? {
-        val projectionD = viewer.camera.getProjectionMatrix(DoubleArray(16))
-        val viewD = viewer.camera.getViewMatrix(DoubleArray(16))
-        val projection = FloatArray(16) { index -> projectionD[index].toFloat() }
-        val viewMatrix = FloatArray(16) { index -> viewD[index].toFloat() }
-        val viewProjection = FloatArray(16)
-        val inverse = FloatArray(16)
-        Matrix.multiplyMM(viewProjection, 0, projection, 0, viewMatrix, 0)
-        return if (Matrix.invertM(inverse, 0, viewProjection, 0)) inverse else null
-    }
-
-    private fun unproject(
-        x: Float, y: Float, depth: Float, inverseViewProjection: FloatArray,
-        viewportLeft: Int, viewportBottom: Int, viewportWidth: Int, viewportHeight: Int
-    ): FloatArray? {
-        if (viewportWidth <= 0 || viewportHeight <= 0) return null
-        val ndc = floatArrayOf(
-            ((x - viewportLeft) / viewportWidth) * 2f - 1f,
-            ((y - viewportBottom) / viewportHeight) * 2f - 1f,
-            depth,
-            1f
-        )
-        val world = FloatArray(4)
-        Matrix.multiplyMV(world, 0, inverseViewProjection, 0, ndc, 0)
-        if (abs(world[3]) < 1e-6f) return null
-        return floatArrayOf(world[0] / world[3], world[1] / world[3], world[2] / world[3])
-    }
-
-    private fun isValidNormalizedPivot(point: FloatArray): Boolean {
-        if (point.size < 3 || point.any { !it.isFinite() }) return false
-        // transformToUnitCube() places all original bounds inside [-1, 1].
-        // A small margin tolerates skinning and numeric reconstruction error.
-        if (abs(point[0]) > 1.25f || abs(point[1]) > 1.25f || abs(point[2]) > 1.25f) return false
-        val radiusSquared = point[0] * point[0] + point[1] * point[1] + point[2] * point[2]
-        return radiusSquared <= 1.9f * 1.9f
     }
 
     private fun selectedFileSize(uri: Uri): Long {
@@ -310,14 +236,8 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
     override fun onPause() { rendering = false; Choreographer.getInstance().removeFrameCallback(this); super.onPause() }
     override fun doFrame(frameTimeNanos: Long) {
         if (!rendering) return
-        // Reuse one pose array for the app lifetime; no JNI array allocation
-        // or young-generation GC pressure occurs in the render loop.
-        nativeCamera.nativeUpdate(frameTimeNanos / 1_000_000_000.0, cameraPose)
-        viewer.camera.lookAt(
-            cameraPose[0].toDouble(), cameraPose[1].toDouble(), cameraPose[2].toDouble(),
-            cameraPose[3].toDouble(), cameraPose[4].toDouble(), cameraPose[5].toDouble(),
-            cameraPose[6].toDouble(), cameraPose[7].toDouble(), cameraPose[8].toDouble()
-        )
+        // ModelViewer.render() reads its native Manipulator and applies the
+        // sole camera pose immediately before rendering.
         viewer.render(frameTimeNanos)
         Choreographer.getInstance().postFrameCallback(this)
     }

@@ -11,16 +11,8 @@ android {
         applicationId = "luxe.texture3d.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 22
-        versionName = "0.7.0"
-        externalNativeBuild {
-            cmake { cppFlags += listOf("-std=c++17", "-O2", "-ffast-math") }
-        }
-        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
-    }
-
-    externalNativeBuild {
-        cmake { path = file("src/main/cpp/CMakeLists.txt"); version = "3.22.1" }
+        versionCode = 23
+        versionName = "0.8.0"
     }
     buildFeatures { viewBinding = false }
     packaging { jniLibs { useLegacyPackaging = false } }

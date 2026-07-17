@@ -1,6 +1,0 @@
-cmake_minimum_required(VERSION 3.22.1)
-project(luxe_camera LANGUAGES CXX)
-add_library(luxe_camera SHARED camera_controller.cpp)
-target_compile_features(luxe_camera PRIVATE cxx_std_17)
-find_library(log-lib log)
-target_link_libraries(luxe_camera PRIVATE ${log-lib})
