@@ -21,7 +21,7 @@ class CutPanelView(context: Context) : View(context) {
         path.reset()
         path.moveTo(cut, 0f)
         path.lineTo(width-cut, 0f)
-        path.lineTo(width, cut)
+        path.lineTo(width.toFloat(), cut)
         path.lineTo(width-cut, height.toFloat())
         path.lineTo(cut, height.toFloat())
         path.lineTo(0f, height-cut)
