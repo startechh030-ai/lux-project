@@ -29,6 +29,7 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
     private lateinit var cameraInput: CameraInputView
     private lateinit var viewer: ModelViewer
     private lateinit var manipulator: Manipulator
+    private lateinit var editorGrid: EditorGrid
     private lateinit var status: TextView
     private var solidSkybox: Skybox? = null
     private var rendering = false
@@ -59,6 +60,18 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
         }
         root.addView(cameraInput, FrameLayout.LayoutParams(-1, -1))
 
+        // Editor shell: full-height side rails and a clipped 80% top rail.
+        val warmPanel = 0xee191715.toInt()
+        val leftRail = View(this).apply { setBackgroundColor(warmPanel) }
+        root.addView(leftRail, FrameLayout.LayoutParams(dp(72), -1, Gravity.START))
+        val rightRail = View(this).apply { setBackgroundColor(warmPanel) }
+        root.addView(rightRail, FrameLayout.LayoutParams(dp(64), -1, Gravity.END))
+        val topRail = CutPanelView(this)
+        root.addView(topRail, FrameLayout.LayoutParams(
+            (resources.displayMetrics.widthPixels * 0.80f).toInt(), dp(58),
+            Gravity.TOP or Gravity.CENTER_HORIZONTAL
+        ))
+
         val open = ImageButton(this).apply {
             setImageResource(luxe.texture3d.app.R.drawable.ic_open)
             contentDescription = "Open GLB model"
@@ -68,7 +81,20 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
             setOnClickListener { openModel.launch(arrayOf("model/gltf-binary", "application/octet-stream", "*/*")) }
         }
         root.addView(open, FrameLayout.LayoutParams(dp(52), dp(52), Gravity.TOP or Gravity.START).apply {
-            leftMargin = dp(16); topMargin = dp(16)
+            leftMargin = dp(10); topMargin = dp(10)
+        })
+
+        val settings = ImageButton(this).apply {
+            setImageResource(luxe.texture3d.app.R.drawable.ic_settings)
+            contentDescription = "Settings"
+            setBackgroundResource(luxe.texture3d.app.R.drawable.panel_bg)
+            setPadding(dp(13), dp(13), dp(13), dp(13))
+            setOnClickListener {
+                Toast.makeText(this@MainActivity, "Settings panel comes next", Toast.LENGTH_SHORT).show()
+            }
+        }
+        root.addView(settings, FrameLayout.LayoutParams(dp(50), dp(50), Gravity.BOTTOM or Gravity.START).apply {
+            leftMargin = dp(11); bottomMargin = dp(12)
         })
 
         status = TextView(this).apply {
@@ -91,11 +117,15 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
             // weighted response expected from a mobile sculpting viewport.
             .orbitSpeed(0.0035f, 0.0035f)
             .zoomSpeed(0.01f)
+            // Pan against a plane through the model target, not Filament's
+            // default z=0 plane. This makes pan usable across the viewport.
+            .groundPlane(0f, 0f, 1f, 4f)
             .viewport(surface.width.coerceAtLeast(1), surface.height.coerceAtLeast(1))
             .build(Manipulator.Mode.ORBIT)
         cameraInput.manipulator = manipulator
         viewer = ModelViewer(surface, manipulator = manipulator)
         loadEnvironment()
+        editorGrid = EditorGrid(viewer.engine, viewer.scene, readAsset("materials/luxe_lines.filamat"))
     }
 
     private fun loadEnvironment() {

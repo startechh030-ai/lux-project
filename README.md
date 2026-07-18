@@ -52,3 +52,15 @@ The camera is informed by common patterns across Nomad Sculpt, ArmorPaint, Sculp
 3. Material inspection modes
 4. Base-color texture painting
 5. UV workflow and layers
+
+## Editor shell and 3D guides — 0.9.0
+
+- Actual Filament line geometry provides a 20×20 ground grid.
+- X/Y/Z axes intersect at the normalized model center `(0,0,-4)`.
+- A small center cross marks the current loaded model pivot.
+- Grid and axes participate in real 3D camera orbit, zoom, depth testing, and perspective.
+- Filament pan ground plane is aligned to `z=-4` for viewport-wide response.
+- Full-height warm-black left/right rails reserve future tool locations.
+- A clipped 80%-width top rail establishes the editor silhouette.
+- Settings icon from the supplied outline pack is placed at lower-left.
+- Settings currently opens a placeholder message; no custom native layer is added until a setting actually needs C++.
