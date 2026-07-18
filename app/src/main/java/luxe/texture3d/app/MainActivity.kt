@@ -61,9 +61,7 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
         // SurfaceView. This avoids device-specific SurfaceView touch failures.
         cameraInput = CameraInputView(this).apply {
             onGesture = { gesture -> status.text = "CAMERA INPUT  •  $gesture" }
-            onDoubleTap = {
-                if (::manipulator.isInitialized) manipulator.jumpToBookmark(manipulator.homeBookmark)
-            }
+            onDoubleTap = { resetCameraHome() }
         }
         root.addView(cameraInput, FrameLayout.LayoutParams(-1, -1))
 
@@ -156,6 +154,12 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
     private fun readAsset(path: String): ByteBuffer {
         val bytes = assets.open(path).use { it.readBytes() }
         return ByteBuffer.allocateDirect(bytes.size).order(ByteOrder.nativeOrder()).apply { put(bytes); flip() }
+    }
+
+    private fun resetCameraHome() {
+        if (::manipulator.isInitialized) {
+            manipulator.jumpToBookmark(manipulator.homeBookmark)
+        }
     }
 
     private fun handleSelectedModel(uri: Uri) {
