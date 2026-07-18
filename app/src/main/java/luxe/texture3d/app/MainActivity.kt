@@ -1,6 +1,7 @@
 package luxe.texture3d.app
 
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AlertDialog
 import android.app.ActivityManager
 import android.net.Uri
 import android.os.Bundle
@@ -16,6 +17,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import com.google.android.filament.Skybox
+import com.google.android.filament.utils.Float3
 import com.google.android.filament.utils.KTX1Loader
 import com.google.android.filament.utils.Manipulator
 import com.google.android.filament.utils.ModelViewer
@@ -31,11 +33,13 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
     private lateinit var manipulator: Manipulator
     private lateinit var editorGrid: EditorGrid
     private lateinit var status: TextView
+    private var spawnPoint = Float3(0f, 0f, -4f)
+    private var hasCustomSpawn = false
     private var solidSkybox: Skybox? = null
     private var rendering = false
 
     private val openModel = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) loadGlb(uri)
+        if (uri != null) handleSelectedModel(uri)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -57,20 +61,11 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
         // SurfaceView. This avoids device-specific SurfaceView touch failures.
         cameraInput = CameraInputView(this).apply {
             onGesture = { gesture -> status.text = "CAMERA INPUT  •  $gesture" }
+            onDoubleTap = {
+                if (::manipulator.isInitialized) manipulator.jumpToBookmark(manipulator.homeBookmark)
+            }
         }
         root.addView(cameraInput, FrameLayout.LayoutParams(-1, -1))
-
-        // Editor shell: full-height side rails and a clipped 80% top rail.
-        val warmPanel = 0xee191715.toInt()
-        val leftRail = View(this).apply { setBackgroundColor(warmPanel) }
-        root.addView(leftRail, FrameLayout.LayoutParams(dp(72), -1, Gravity.START))
-        val rightRail = View(this).apply { setBackgroundColor(warmPanel) }
-        root.addView(rightRail, FrameLayout.LayoutParams(dp(64), -1, Gravity.END))
-        val topRail = CutPanelView(this)
-        root.addView(topRail, FrameLayout.LayoutParams(
-            (resources.displayMetrics.widthPixels * 0.80f).toInt(), dp(58),
-            Gravity.TOP or Gravity.CENTER_HORIZONTAL
-        ))
 
         val open = ImageButton(this).apply {
             setImageResource(luxe.texture3d.app.R.drawable.ic_open)
@@ -97,15 +92,25 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
             leftMargin = dp(11); bottomMargin = dp(12)
         })
 
+        val markSpawn = ImageButton(this).apply {
+            setImageResource(luxe.texture3d.app.R.drawable.ic_target)
+            contentDescription = "Mark current camera target as model spawn point"
+            setBackgroundResource(luxe.texture3d.app.R.drawable.panel_bg)
+            setPadding(dp(13), dp(13), dp(13), dp(13))
+            setOnClickListener { saveCurrentTargetAsSpawn() }
+        }
+        root.addView(markSpawn, FrameLayout.LayoutParams(dp(50), dp(50), Gravity.BOTTOM or Gravity.END).apply {
+            rightMargin = dp(12); bottomMargin = dp(12)
+        })
+
         status = TextView(this).apply {
             text = "OPEN A GLB  •  Drag: orbit  •  Pinch: zoom  •  Two fingers: pan"
             setTextColor(0xffbae6fd.toInt()); textSize = 12f; gravity = Gravity.CENTER
             setBackgroundResource(luxe.texture3d.app.R.drawable.panel_bg)
             setPadding(dp(16), 0, dp(16), 0)
         }
-        root.addView(status, FrameLayout.LayoutParams(-2, dp(38), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
-            bottomMargin = dp(12)
-        })
+        status.alpha = 0f
+        root.addView(status, FrameLayout.LayoutParams(1, 1, Gravity.BOTTOM))
         setContentView(root)
         applyImmersiveMode()
 
@@ -116,7 +121,7 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
             // Filament defaults to 0.01. A lower value gives the deliberate,
             // weighted response expected from a mobile sculpting viewport.
             .orbitSpeed(0.0035f, 0.0035f)
-            .zoomSpeed(0.01f)
+            .zoomSpeed(0.018f)
             // Pan against a plane through the model target, not Filament's
             // default z=0 plane. This makes pan usable across the viewport.
             .groundPlane(0f, 0f, 1f, 4f)
@@ -125,7 +130,12 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
         cameraInput.manipulator = manipulator
         viewer = ModelViewer(surface, manipulator = manipulator)
         loadEnvironment()
-        editorGrid = EditorGrid(viewer.engine, viewer.scene, readAsset("materials/luxe_lines.filamat"))
+        editorGrid = EditorGrid(
+            viewer.engine, viewer.scene,
+            readAsset("materials/luxe_grid.filamat"),
+            readAsset("materials/luxe_lines.filamat")
+        )
+        cameraInput.inputEnabled = true
     }
 
     private fun loadEnvironment() {
@@ -148,6 +158,31 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
         return ByteBuffer.allocateDirect(bytes.size).order(ByteOrder.nativeOrder()).apply { put(bytes); flip() }
     }
 
+    private fun handleSelectedModel(uri: Uri) {
+        if (viewer.asset == null) {
+            loadGlb(uri)
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Import model")
+            .setMessage("Open this GLB as a new project or add it to the current scene?")
+            .setPositiveButton("Open as new project") { _, _ -> loadGlb(uri) }
+            .setNegativeButton("Add to scene") { _, _ ->
+                Toast.makeText(this, "Multi-model scenes come in the next scene-manager step", Toast.LENGTH_LONG).show()
+            }
+            .setNeutralButton("Cancel", null)
+            .show()
+    }
+
+    private fun saveCurrentTargetAsSpawn() {
+        if (!::manipulator.isInitialized) return
+        val eye = DoubleArray(3); val target = DoubleArray(3); val up = DoubleArray(3)
+        manipulator.getLookAt(eye, target, up)
+        spawnPoint = Float3(target[0].toFloat(), target[1].toFloat(), target[2].toFloat())
+        hasCustomSpawn = true
+        Toast.makeText(this, "Model spawn point marked", Toast.LENGTH_SHORT).show()
+    }
+
     private fun loadGlb(uri: Uri) {
         try {
             val name = displayName(uri)
@@ -156,7 +191,7 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
             // Empty-scene gestures must never alter the next model's pivot.
             cameraInput.inputEnabled = false
             manipulator.grabEnd()
-            manipulator.jumpToBookmark(manipulator.homeBookmark)
+            if (!hasCustomSpawn) manipulator.jumpToBookmark(manipulator.homeBookmark)
             val fileSize = selectedFileSize(uri)
             val safeLimit = safeGlbImportLimit()
             if (fileSize <= 0L) {
@@ -173,11 +208,10 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
             val buffer = readDirectBuffer(uri, fileSize)
             viewer.loadModelGlb(buffer)
             if (viewer.asset == null) throw IllegalArgumentException("Filament could not parse this GLB")
-            // ModelViewer's default placement (centered at z = -4) matches
-            // its native manipulator and gives consistent initial framing.
-            viewer.transformToUnitCube()
-            // Every import starts from the exact home target and orientation.
-            manipulator.jumpToBookmark(manipulator.homeBookmark)
+            // Spawn at the marked camera target, or the default center when no
+            // custom location has been marked.
+            viewer.transformToUnitCube(spawnPoint)
+            if (!hasCustomSpawn) manipulator.jumpToBookmark(manipulator.homeBookmark)
             cameraInput.inputEnabled = true
             status.text = "$name  •  ORBIT VIEW"
         } catch (_: OutOfMemoryError) {

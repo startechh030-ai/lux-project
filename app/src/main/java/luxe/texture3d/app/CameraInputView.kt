@@ -11,6 +11,7 @@ import kotlin.math.hypot
 class CameraInputView(context: Context) : View(context) {
     lateinit var manipulator: Manipulator
     var onGesture: ((String) -> Unit)? = null
+    var onDoubleTap: (() -> Unit)? = null
     var inputEnabled: Boolean = false
 
     private enum class TwoFingerMode { NONE, UNDECIDED, PAN, ZOOM }
@@ -101,6 +102,7 @@ class CameraInputView(context: Context) : View(context) {
                     val now = event.eventTime
                     if (now - lastTapTime in 1..350) {
                         report("DOUBLE TAP")
+                        onDoubleTap?.invoke()
                         lastTapTime = 0L
                     } else lastTapTime = now
                     performClick()

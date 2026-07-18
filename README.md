@@ -64,3 +64,16 @@ The camera is informed by common patterns across Nomad Sculpt, ArmorPaint, Sculp
 - A clipped 80%-width top rail establishes the editor silhouette.
 - Settings icon from the supplied outline pack is placed at lower-left.
 - Settings currently opens a placeholder message; no custom native layer is added until a setting actually needs C++.
+
+## Open viewport and scene-placement foundation — 0.10.0
+
+- Removed the left rail, right rail, clipped top bar, and visible bottom status bar.
+- Replaced finite line grid with a procedural world-space grid shader on a 200×200 plane; repetition and distance fade make the working ground appear continuous.
+- Replaced the oversized center axes with a compact ground-level X/Y/Z locator and stronger center point.
+- Camera input is enabled with no model loaded.
+- Double tap returns the Filament camera to its home bookmark.
+- Pan plane remains aligned to the model/grid target at z=-4.
+- Zoom sensitivity increased from 0.01 to 0.018.
+- New target button stores the current camera target as the next model spawn position.
+- Importing while a model exists shows Open as New Project / Add to Scene / Cancel.
+- Add to Scene is intentionally a prompt-only placeholder until the multi-asset scene manager replaces one-asset ModelViewer.
