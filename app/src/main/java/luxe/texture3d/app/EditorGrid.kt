@@ -4,7 +4,7 @@ import com.google.android.filament.*
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
-/** Procedural ground grid plus a compact ground-level origin marker. */
+/** Godot/Prisma-inspired editor ground: procedural grid plus compact world origin. */
 class EditorGrid(
     private val engine: Engine,
     private val scene: Scene,
@@ -16,25 +16,17 @@ class EditorGrid(
 
     init {
         addGridPlane()
-        val z=-4f; val y=-0.995f; val r=0.55f
-        addLines(floatArrayOf(-r,y,z,r,y,z),0.92f,0.20f,0.22f,1f)
-        addLines(floatArrayOf(0f,y,z-r,0f,y,z+r),0.18f,0.43f,0.96f,1f)
-        // Short, bold-looking vertical locator instead of the old full-screen axes.
-        addLines(floatArrayOf(0f,y,z,0f,y+0.55f,z),0.25f,0.92f,0.36f,1f)
-        val c=0.07f
-        addLines(floatArrayOf(-c,y+0.01f,z,c,y+0.01f,z,0f,y+0.01f,z-c,0f,y+0.01f,z+c),
-            0.76f,0.92f,1f,1f)
+        addWorldOrigin()
     }
 
     private fun addGridPlane() {
-        val y=-1f; val z=-4f; val h=100f
-        val points=floatArrayOf(-h,y,z-h, h,y,z-h, h,y,z+h, -h,y,z+h)
-        val indices=shortArrayOf(0,1,2,0,2,3)
+        val y=0f; val z=-4f; val half=100f
+        val points=floatArrayOf(-half,y,z-half, half,y,z-half, half,y,z+half, -half,y,z+half)
         val vb=createVertexBuffer(points)
-        val ib=createIndexBuffer(indices)
+        val ib=createIndexBuffer(shortArrayOf(0,1,2,0,2,3))
         val entity=EntityManager.get().create()
         RenderableManager.Builder(1)
-            .boundingBox(Box(0f,y,z,h,0.1f,h))
+            .boundingBox(Box(0f,y,z,half,0.05f,half))
             .geometry(0,RenderableManager.PrimitiveType.TRIANGLES,vb,ib)
             .material(0,gridMaterial.defaultInstance)
             .culling(false).castShadows(false).receiveShadows(false)
@@ -42,16 +34,26 @@ class EditorGrid(
         scene.addEntity(entity)
     }
 
+    private fun addWorldOrigin() {
+        val z=-4f; val y=0.012f; val radius=0.42f
+        addLines(floatArrayOf(-radius,y,z,radius,y,z),0.72f,0.20f,0.22f,0.78f)
+        addLines(floatArrayOf(0f,y,z-radius,0f,y,z+radius),0.18f,0.40f,0.80f,0.78f)
+        addLines(floatArrayOf(0f,y,z,0f,y+0.42f,z),0.25f,0.72f,0.32f,0.82f)
+        val c=0.055f
+        addLines(floatArrayOf(-c,y+0.01f,z,c,y+0.01f,z,0f,y+0.01f,z-c,0f,y+0.01f,z+c),
+            0.68f,0.82f,0.90f,0.9f)
+    }
+
     private fun addLines(points:FloatArray,r:Float,g:Float,b:Float,a:Float) {
         val count=points.size/3
-        val indices=ShortArray(count){it.toShort()}
-        val vb=createVertexBuffer(points); val ib=createIndexBuffer(indices)
-        val mi=lineMaterial.createInstance().apply{setParameter("lineColor",r,g,b,a)}
+        val vb=createVertexBuffer(points)
+        val ib=createIndexBuffer(ShortArray(count){it.toShort()})
+        val instance=lineMaterial.createInstance().apply{setParameter("lineColor",r,g,b,a)}
         val entity=EntityManager.get().create()
         RenderableManager.Builder(1)
-            .boundingBox(Box(0f,0f,-4f,2f,2f,2f))
+            .boundingBox(Box(0f,0.2f,-4f,1f,1f,1f))
             .geometry(0,RenderableManager.PrimitiveType.LINES,vb,ib)
-            .material(0,mi).culling(false).castShadows(false).receiveShadows(false)
+            .material(0,instance).culling(false).castShadows(false).receiveShadows(false)
             .build(engine,entity)
         scene.addEntity(entity)
     }
@@ -63,10 +65,12 @@ class EditorGrid(
             .attribute(VertexBuffer.VertexAttribute.POSITION,0,VertexBuffer.AttributeType.FLOAT3,0,12)
             .build(engine).also{it.setBufferAt(engine,0,data)}
     }
+
     private fun createIndexBuffer(indices:ShortArray):IndexBuffer {
         val data=ByteBuffer.allocateDirect(indices.size*2).order(ByteOrder.nativeOrder())
         indices.forEach{data.putShort(it)};data.flip()
-        return IndexBuffer.Builder().indexCount(indices.size).bufferType(IndexBuffer.Builder.IndexType.USHORT)
-            .build(engine).also{it.setBuffer(engine,data)}
+        return IndexBuffer.Builder().indexCount(indices.size)
+            .bufferType(IndexBuffer.Builder.IndexType.USHORT).build(engine)
+            .also{it.setBuffer(engine,data)}
     }
 }

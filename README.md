@@ -1,79 +1,57 @@
-# Luxe Texture3D — Mobile Texture Viewer Foundation
+# Luxe Texture3D — Viewport Foundation
 
 Package: `luxe.texture3d.app`
 
-This baseline intentionally uses a simple, reliable viewport camera. Luxe is a texture-painting app, so camera navigation supports the workflow rather than dominating it.
+Luxe Texture3D is an Android texture-editing project. This build establishes a clean mobile 3D viewport inspired broadly by Prisma3D, Godot, ArmorPaint, and other touch-first editors.
 
-## Current features
+## Platform
 
-- Android 8.0+ (`minSdk 26`), Android 16 target (`targetSdk 36`)
-- Filament 1.69.4 GLB rendering
-- Android system file picker; no storage permission
-- Filament-native orbit camera
+- Android 8.0+ (`minSdk 26`)
+- Android 16 target (`targetSdk 36`)
+- Kotlin UI
+- Google Filament 1.69.4
+- GitHub Actions APK build
+
+## Current viewport
+
+- Elevated three-quarter default camera
 - One-finger orbit
-- Responsive intent-separated two-finger pan and pinch zoom
-- Consistent unit-cube model framing
-- Shanghai Bund HDR used only for IBL
-- Neutral dark editor background
-- Immersive landscape fullscreen
-- Direct-buffer GLB loading without a duplicate heap byte array
-- Device-aware GLB import safety limit
-- GitHub Actions debug APK build
+- Two-finger screen-space pan
+- Pinch zoom
+- Double-tap home reset
+- Camera navigation enabled in an empty scene
+- Dark neutral editor environment
+- HDR used only for IBL
+- Procedural minor/major ground grid with distance fade
+- Compact world-origin marker
+- Grounded and uniformly normalized GLB placement
+- Floating Open and Settings buttons only
 
-## Camera principles
+## Import behavior
 
-- No automatic mesh picking
-- No dynamic surface pivot
-- No camera target changes during ordinary gestures
-- No app-specific C++ camera competing with Filament
-- Every imported model starts from the same home view
-- Camera input is disabled while the scene is empty
+The current viewer supports one GLB project at a time. Importing while a model is loaded asks whether to replace it. Multi-model scene support will be added only after a dedicated scene manager exists.
 
-The camera is informed by common patterns across Nomad Sculpt, ArmorPaint, Sculpt+, Prisma3D, and other mobile 3D tools, but Luxe uses its own texture-focused interaction design.
+Imported models are:
 
-## Controls
+1. uniformly scaled from their bounds;
+2. horizontally centered at the editor origin;
+3. moved so their lowest bound rests on the y=0 grid;
+4. framed by the standard elevated camera.
 
-- Open icon: select a `.glb`
-- One finger: orbit
-- Two-finger movement: pan
-- Pinch: zoom
+## Memory safety
 
-## Build with GitHub Actions
+- GLBs stream directly into a direct buffer.
+- No duplicate source `ByteArray` is kept during import.
+- Import size is limited according to Android app memory class.
+- Incomplete files and allocation failures show user-readable errors.
 
-1. Upload this project to a GitHub repository.
-2. Open **Actions → Build Android APK → Run workflow**.
-3. Download the `LuxeTexture3D-debug-apk` artifact.
+## UI direction
+
+The viewport remains uncluttered until tools are functional. Selection gizmos, contextual toolbars, free-look joystick, multi-model hierarchy, and painting controls are later milestones.
+
+## Build
+
+1. Upload the project to GitHub.
+2. Run **Actions → Build Android APK**.
+3. Download `LuxeTexture3D-debug-apk`.
 4. Extract and install `app-debug.apk`.
-
-## Next product work
-
-1. Editor UI structure
-2. Lighting controls and studio presets
-3. Material inspection modes
-4. Base-color texture painting
-5. UV workflow and layers
-
-## Editor shell and 3D guides — 0.9.0
-
-- Actual Filament line geometry provides a 20×20 ground grid.
-- X/Y/Z axes intersect at the normalized model center `(0,0,-4)`.
-- A small center cross marks the current loaded model pivot.
-- Grid and axes participate in real 3D camera orbit, zoom, depth testing, and perspective.
-- Filament pan ground plane is aligned to `z=-4` for viewport-wide response.
-- Full-height warm-black left/right rails reserve future tool locations.
-- A clipped 80%-width top rail establishes the editor silhouette.
-- Settings icon from the supplied outline pack is placed at lower-left.
-- Settings currently opens a placeholder message; no custom native layer is added until a setting actually needs C++.
-
-## Open viewport and scene-placement foundation — 0.10.0
-
-- Removed the left rail, right rail, clipped top bar, and visible bottom status bar.
-- Replaced finite line grid with a procedural world-space grid shader on a 200×200 plane; repetition and distance fade make the working ground appear continuous.
-- Replaced the oversized center axes with a compact ground-level X/Y/Z locator and stronger center point.
-- Camera input is enabled with no model loaded.
-- Double tap returns the Filament camera to its home bookmark.
-- Pan plane remains aligned to the model/grid target at z=-4.
-- Zoom sensitivity increased from 0.01 to 0.018.
-- New target button stores the current camera target as the next model spawn position.
-- Importing while a model exists shows Open as New Project / Add to Scene / Cancel.
-- Add to Scene is intentionally a prompt-only placeholder until the multi-asset scene manager replaces one-asset ModelViewer.

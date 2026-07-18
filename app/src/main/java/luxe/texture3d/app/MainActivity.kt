@@ -17,7 +17,6 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import com.google.android.filament.Skybox
-import com.google.android.filament.utils.Float3
 import com.google.android.filament.utils.KTX1Loader
 import com.google.android.filament.utils.Manipulator
 import com.google.android.filament.utils.ModelViewer
@@ -33,8 +32,6 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
     private lateinit var manipulator: Manipulator
     private lateinit var editorGrid: EditorGrid
     private lateinit var status: TextView
-    private var spawnPoint = Float3(0f, 0f, -4f)
-    private var hasCustomSpawn = false
     private var solidSkybox: Skybox? = null
     private var rendering = false
 
@@ -90,16 +87,6 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
             leftMargin = dp(11); bottomMargin = dp(12)
         })
 
-        val markSpawn = ImageButton(this).apply {
-            setImageResource(luxe.texture3d.app.R.drawable.ic_target)
-            contentDescription = "Mark current camera target as model spawn point"
-            setBackgroundResource(luxe.texture3d.app.R.drawable.panel_bg)
-            setPadding(dp(13), dp(13), dp(13), dp(13))
-            setOnClickListener { saveCurrentTargetAsSpawn() }
-        }
-        root.addView(markSpawn, FrameLayout.LayoutParams(dp(50), dp(50), Gravity.BOTTOM or Gravity.END).apply {
-            rightMargin = dp(12); bottomMargin = dp(12)
-        })
 
         status = TextView(this).apply {
             text = "OPEN A GLB  •  Drag: orbit  •  Pinch: zoom  •  Two fingers: pan"
@@ -114,12 +101,12 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
 
         // One Filament-native camera owner, with our low-latency touch adapter.
         manipulator = Manipulator.Builder()
-            .targetPosition(0f, 0f, -4f)
-            .orbitHomePosition(0f, 0f, 1f)
+            .targetPosition(0f, 0.7f, -4f)
+            .orbitHomePosition(4f, 3.4f, 4f)
             // Filament defaults to 0.01. A lower value gives the deliberate,
             // weighted response expected from a mobile sculpting viewport.
             .orbitSpeed(0.0035f, 0.0035f)
-            .zoomSpeed(0.018f)
+            .zoomSpeed(0.012f)
             // Pan against a plane through the model target, not Filament's
             // default z=0 plane. This makes pan usable across the viewport.
             .groundPlane(0f, 0f, 1f, 4f)
@@ -168,23 +155,11 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
             return
         }
         AlertDialog.Builder(this)
-            .setTitle("Import model")
-            .setMessage("Open this GLB as a new project or add it to the current scene?")
-            .setPositiveButton("Open as new project") { _, _ -> loadGlb(uri) }
-            .setNegativeButton("Add to scene") { _, _ ->
-                Toast.makeText(this, "Multi-model scenes come in the next scene-manager step", Toast.LENGTH_LONG).show()
-            }
-            .setNeutralButton("Cancel", null)
+            .setTitle("Replace current model?")
+            .setMessage("The current viewer supports one GLB project at a time.")
+            .setPositiveButton("Replace") { _, _ -> loadGlb(uri) }
+            .setNegativeButton("Cancel", null)
             .show()
-    }
-
-    private fun saveCurrentTargetAsSpawn() {
-        if (!::manipulator.isInitialized) return
-        val eye = DoubleArray(3); val target = DoubleArray(3); val up = DoubleArray(3)
-        manipulator.getLookAt(eye, target, up)
-        spawnPoint = Float3(target[0].toFloat(), target[1].toFloat(), target[2].toFloat())
-        hasCustomSpawn = true
-        Toast.makeText(this, "Model spawn point marked", Toast.LENGTH_SHORT).show()
     }
 
     private fun loadGlb(uri: Uri) {
@@ -195,7 +170,7 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
             // Empty-scene gestures must never alter the next model's pivot.
             cameraInput.inputEnabled = false
             manipulator.grabEnd()
-            if (!hasCustomSpawn) manipulator.jumpToBookmark(manipulator.homeBookmark)
+            manipulator.jumpToBookmark(manipulator.homeBookmark)
             val fileSize = selectedFileSize(uri)
             val safeLimit = safeGlbImportLimit()
             if (fileSize <= 0L) {
@@ -212,10 +187,10 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
             val buffer = readDirectBuffer(uri, fileSize)
             viewer.loadModelGlb(buffer)
             if (viewer.asset == null) throw IllegalArgumentException("Filament could not parse this GLB")
-            // Spawn at the marked camera target, or the default center when no
-            // custom location has been marked.
-            viewer.transformToUnitCube(spawnPoint)
-            if (!hasCustomSpawn) manipulator.jumpToBookmark(manipulator.homeBookmark)
+            // Normalize the asset, center it horizontally, and place its
+            // lowest bound directly on the y=0 editor ground.
+            ModelPlacement.placeOnGround(viewer.engine, viewer.asset!!)
+            manipulator.jumpToBookmark(manipulator.homeBookmark)
             cameraInput.inputEnabled = true
             status.text = "$name  •  ORBIT VIEW"
         } catch (_: OutOfMemoryError) {
