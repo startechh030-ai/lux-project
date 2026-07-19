@@ -55,3 +55,11 @@ The viewport remains uncluttered until tools are functional. Selection gizmos, c
 2. Run **Actions → Build Android APK**.
 3. Download `LuxeTexture3D-debug-apk`.
 4. Extract and install `app-debug.apk`.
+
+## Viewport visual correction — 0.11.1
+
+- Grid colors converted to appropriately low linear-RGB values.
+- Ground is now opaque dark charcoal rather than a bright transparent blend.
+- Minor and major line intensity reduced significantly.
+- Origin marker is flush with the ground and no longer has a floating Y line.
+- Filament manipulator panning is explicitly enabled.

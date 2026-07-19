@@ -35,13 +35,14 @@ class EditorGrid(
     }
 
     private fun addWorldOrigin() {
-        val z=-4f; val y=0.012f; val radius=0.42f
-        addLines(floatArrayOf(-radius,y,z,radius,y,z),0.72f,0.20f,0.22f,0.78f)
-        addLines(floatArrayOf(0f,y,z-radius,0f,y,z+radius),0.18f,0.40f,0.80f,0.78f)
-        addLines(floatArrayOf(0f,y,z,0f,y+0.42f,z),0.25f,0.72f,0.32f,0.82f)
-        val c=0.055f
-        addLines(floatArrayOf(-c,y+0.01f,z,c,y+0.01f,z,0f,y+0.01f,z-c,0f,y+0.01f,z+c),
-            0.68f,0.82f,0.90f,0.9f)
+        // Keep the world marker flush with the grid. A model transform gizmo
+        // will be a separate selection-only feature later.
+        val z=-4f; val y=0.002f; val radius=0.34f
+        addLines(floatArrayOf(-radius,y,z,radius,y,z),0.62f,0.16f,0.18f,0.72f)
+        addLines(floatArrayOf(0f,y,z-radius,0f,y,z+radius),0.14f,0.34f,0.70f,0.72f)
+        val c=0.045f
+        addLines(floatArrayOf(-c,y,z,c,y,z,0f,y,z-c,0f,y,z+c),
+            0.58f,0.70f,0.78f,0.82f)
     }
 
     private fun addLines(points:FloatArray,r:Float,g:Float,b:Float,a:Float) {

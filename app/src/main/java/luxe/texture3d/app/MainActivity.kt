@@ -110,6 +110,7 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
             // Pan against a plane through the model target, not Filament's
             // default z=0 plane. This makes pan usable across the viewport.
             .groundPlane(0f, 0f, 1f, 4f)
+            .panning(true)
             .viewport(surface.width.coerceAtLeast(1), surface.height.coerceAtLeast(1))
             .build(Manipulator.Mode.ORBIT)
         cameraInput.manipulator = manipulator
