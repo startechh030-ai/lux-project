@@ -11,8 +11,8 @@ android {
         applicationId = "luxe.texture3d.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 29
-        versionName = "0.11.1"
+        versionCode = 30
+        versionName = "0.12.0"
     }
     buildFeatures { viewBinding = false }
     packaging { jniLibs { useLegacyPackaging = false } }
@@ -30,6 +30,7 @@ kotlin {
 dependencies {
     implementation("androidx.core:core-ktx:1.16.0")
     implementation("androidx.activity:activity-ktx:1.10.1")
+    implementation("androidx.documentfile:documentfile:1.0.1")
     implementation("androidx.appcompat:appcompat:1.7.1")
     implementation("com.google.android.material:material:1.12.0")
     implementation("com.google.android.filament:filament-android:1.69.4")

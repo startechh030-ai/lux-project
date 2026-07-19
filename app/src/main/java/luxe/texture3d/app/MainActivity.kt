@@ -1,289 +1,183 @@
 package luxe.texture3d.app
 
-import androidx.appcompat.app.AppCompatActivity
-import androidx.appcompat.app.AlertDialog
-import android.app.ActivityManager
+import android.content.Intent
+import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
-import android.provider.OpenableColumns
-import android.view.Choreographer
 import android.view.Gravity
-import android.view.SurfaceView
 import android.view.View
-import android.view.WindowManager
-import android.widget.FrameLayout
-import android.widget.ImageButton
-import android.widget.TextView
-import android.widget.Toast
+import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
-import com.google.android.filament.Skybox
-import com.google.android.filament.utils.KTX1Loader
-import com.google.android.filament.utils.Manipulator
-import com.google.android.filament.utils.ModelViewer
-import com.google.android.filament.utils.Utils
-import java.io.FileInputStream
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
+import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.app.AppCompatActivity
+import androidx.documentfile.provider.DocumentFile
 
-class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
-    private lateinit var surface: SurfaceView
-    private lateinit var cameraInput: CameraInputView
-    private lateinit var viewer: ModelViewer
-    private lateinit var manipulator: Manipulator
-    private lateinit var editorGrid: EditorGrid
-    private lateinit var status: TextView
-    private var solidSkybox: Skybox? = null
-    private var rendering = false
+class MainActivity : AppCompatActivity() {
+    private data class Template(val title:String,val asset:String?,val icon:Int)
 
-    private val openModel = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) handleSelectedModel(uri)
+    private val templates=listOf(
+        Template("Empty scene",null,R.drawable.thumb_empty),
+        Template("Cube","cube.glb",R.drawable.thumb_cube),
+        Template("Sphere","sphere.glb",R.drawable.thumb_sphere),
+        Template("Cylinder","cylinder.glb",R.drawable.thumb_cylinder),
+        Template("Capsule","capsule.glb",R.drawable.thumb_capsule),
+        Template("Plane","plane.glb",R.drawable.thumb_plane),
+        Template("Round Box","round_box.glb",R.drawable.thumb_round_box),
+        Template("Torus","torus.glb",R.drawable.thumb_torus),
+        Template("Trolls","trolls.glb",R.drawable.thumb_trolls)
+    )
+
+    private lateinit var projectsList:LinearLayout
+    private lateinit var folderText:TextView
+    private val prefs by lazy { getSharedPreferences("project_hub",MODE_PRIVATE) }
+
+    private val chooseFolder=registerForActivityResult(ActivityResultContracts.OpenDocumentTree()){uri->
+        if(uri!=null){
+            runCatching { contentResolver.takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION) }
+            prefs.edit().putString(KEY_ROOT_URI,uri.toString()).apply()
+            refreshFolderLabel();refreshProjects()
+        }
     }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
+    override fun onCreate(savedInstanceState:Bundle?){
         super.onCreate(savedInstanceState)
-        Utils.init()
-        window.statusBarColor = android.graphics.Color.TRANSPARENT
-        window.navigationBarColor = android.graphics.Color.TRANSPARENT
-        // This legacy fullscreen flag is reliable across our API 26+ device range.
-        window.setFlags(
-            WindowManager.LayoutParams.FLAG_FULLSCREEN,
-            WindowManager.LayoutParams.FLAG_FULLSCREEN
-        )
+        window.statusBarColor=0xff121416.toInt();window.navigationBarColor=0xff121416.toInt()
+        setContentView(buildUi())
+        refreshFolderLabel();refreshProjects()
+        if(rootUri()==null) showFirstFolderDialog()
+    }
 
-        val root = FrameLayout(this).apply { setBackgroundColor(0xff0f172a.toInt()) }
-        surface = SurfaceView(this).apply { setZOrderOnTop(false) }
-        root.addView(surface, FrameLayout.LayoutParams(-1, -1))
+    override fun onResume(){super.onResume();if(::projectsList.isInitialized)refreshProjects()}
 
-        // A normal transparent View captures input above the hardware-backed
-        // SurfaceView. This avoids device-specific SurfaceView touch failures.
-        cameraInput = CameraInputView(this).apply {
-            onGesture = { gesture -> status.text = "CAMERA INPUT  •  $gesture" }
-            onDoubleTap = { resetCameraHome() }
+    private fun buildUi():View{
+        val root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setBackgroundColor(0xff121416.toInt());setPadding(dp(22),dp(16),dp(22),dp(16))}
+        val titleRow=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
+        titleRow.addView(TextView(this).apply{text="LUXE TEXTURE3D";textSize=21f;setTextColor(0xffe8f5fb.toInt());setTypeface(typeface,1)},LinearLayout.LayoutParams(0,dp(48),1f))
+        titleRow.addView(button("+  New Project"){showNewProjectDialog()},LinearLayout.LayoutParams(-2,dp(44)))
+        root.addView(titleRow)
+
+        val tabs=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
+        listOf("Local Projects","Marketplace","Settings","Plugin Manager").forEachIndexed{i,name->
+            tabs.addView(TextView(this).apply{
+                text=name;textSize=14f;gravity=Gravity.CENTER;setPadding(dp(18),0,dp(18),0)
+                setTextColor(if(i==0)0xff38bdf8.toInt() else 0xff9da8ae.toInt())
+                setBackgroundColor(if(i==0)0xff202a30.toInt() else Color.TRANSPARENT)
+                setOnClickListener{if(i!=0)Toast.makeText(this@MainActivity,"$name — Coming soon",Toast.LENGTH_SHORT).show()}
+            },LinearLayout.LayoutParams(-2,dp(42)))
         }
-        root.addView(cameraInput, FrameLayout.LayoutParams(-1, -1))
+        root.addView(tabs)
 
-        val open = ImageButton(this).apply {
-            setImageResource(luxe.texture3d.app.R.drawable.ic_open)
-            contentDescription = "Open GLB model"
-            setBackgroundResource(luxe.texture3d.app.R.drawable.panel_bg)
-            setColorFilter(0xffbae6fd.toInt())
-            setPadding(dp(12), dp(12), dp(12), dp(12))
-            setOnClickListener { openModel.launch(arrayOf("model/gltf-binary", "application/octet-stream", "*/*")) }
+        val folderRow=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(0,dp(12),0,dp(10))}
+        folderText=TextView(this).apply{textSize=12f;setTextColor(0xffaebbc2.toInt())}
+        folderRow.addView(folderText,LinearLayout.LayoutParams(0,dp(38),1f))
+        folderRow.addView(button("Choose Folder"){chooseFolder.launch(rootUri())},LinearLayout.LayoutParams(-2,dp(38)))
+        root.addView(folderRow)
+
+        projectsList=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL}
+        root.addView(ScrollView(this).apply{addView(projectsList)},LinearLayout.LayoutParams(-1,0,1f))
+        return root
+    }
+
+    private fun refreshFolderLabel(){folderText.text=rootUri()?.let{"Project directory: $it"}?:"No project directory selected"}
+
+    private fun refreshProjects(){
+        projectsList.removeAllViews()
+        val root=rootDocument()
+        if(root==null){projectsList.addView(emptyLabel("Choose a project folder to begin."));return}
+        val dirs=runCatching{root.listFiles().filter{it.isDirectory}.sortedBy{it.name?.lowercase()}}.getOrDefault(emptyList())
+        if(dirs.isEmpty()){projectsList.addView(emptyLabel("No local projects yet. Create your first project."));return}
+        dirs.forEach{dir->projectsList.addView(projectCard(dir))}
+    }
+
+    private fun projectCard(dir:DocumentFile):View{
+        val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(dp(16),dp(10),dp(14),dp(10));setBackgroundResource(R.drawable.panel_bg)}
+        row.addView(ImageView(this).apply{setImageResource(projectIcon(dir));setColorFilter(0xffbae6fd.toInt());setPadding(dp(6),dp(6),dp(6),dp(6))},LinearLayout.LayoutParams(dp(54),dp(54)))
+        val model=dir.findFile("model.glb")
+        row.addView(LinearLayout(this).apply{
+            orientation=LinearLayout.VERTICAL
+            addView(TextView(this@MainActivity).apply{text=dir.name?:"Untitled";textSize=16f;setTextColor(0xffeef8fc.toInt())})
+            addView(TextView(this@MainActivity).apply{text=if(model!=null)"GLB project" else "Empty scene";textSize=12f;setTextColor(0xff8fa0a8.toInt())})
+        },LinearLayout.LayoutParams(0,-2,1f))
+        row.addView(button("Open"){openProject(dir)},LinearLayout.LayoutParams(-2,dp(38)))
+        return FrameLayout(this).apply{setPadding(0,0,0,dp(9));addView(row,FrameLayout.LayoutParams(-1,dp(76)))}
+    }
+
+    private fun showNewProjectDialog(){
+        if(rootDocument()==null){showFirstFolderDialog();return}
+        val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(22),dp(8),dp(22),0)}
+        val name=EditText(this).apply{hint="Project name";setSingleLine(true)}
+        val preview=ImageView(this).apply{setImageResource(templates[0].icon);setPadding(dp(18),dp(18),dp(18),dp(18))}
+        val spinner=Spinner(this)
+        spinner.adapter=ArrayAdapter(this,android.R.layout.simple_spinner_dropdown_item,templates.map{it.title})
+        spinner.onItemSelectedListener=object:android.widget.AdapterView.OnItemSelectedListener{
+            override fun onItemSelected(p:android.widget.AdapterView<*>?,v:View?,position:Int,id:Long){preview.setImageResource(templates[position].icon)}
+            override fun onNothingSelected(p:android.widget.AdapterView<*>?){}
         }
-        root.addView(open, FrameLayout.LayoutParams(dp(52), dp(52), Gravity.TOP or Gravity.START).apply {
-            leftMargin = dp(10); topMargin = dp(10)
-        })
-
-        val settings = ImageButton(this).apply {
-            setImageResource(luxe.texture3d.app.R.drawable.ic_settings)
-            contentDescription = "Settings"
-            setBackgroundResource(luxe.texture3d.app.R.drawable.panel_bg)
-            setPadding(dp(13), dp(13), dp(13), dp(13))
-            setOnClickListener {
-                Toast.makeText(this@MainActivity, "Settings panel comes next", Toast.LENGTH_SHORT).show()
+        box.addView(name,LinearLayout.LayoutParams(-1,dp(54)))
+        box.addView(TextView(this).apply{text="Start with a template";setTextColor(0xffaebbc2.toInt());setPadding(0,dp(10),0,dp(5))})
+        box.addView(preview,LinearLayout.LayoutParams(-1,dp(96)))
+        box.addView(spinner,LinearLayout.LayoutParams(-1,dp(52)))
+        val dialog=AlertDialog.Builder(this).setTitle("New Project").setView(box)
+            .setPositiveButton("Jump into Editor",null).setNegativeButton("Cancel",null).create()
+        dialog.setOnShowListener{
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener{
+                val title=name.text.toString().trim()
+                if(title.isBlank()){name.error="Project name is required";return@setOnClickListener}
+                createProject(title,templates[spinner.selectedItemPosition])?.let{project->dialog.dismiss();openProject(project)}
             }
         }
-        root.addView(settings, FrameLayout.LayoutParams(dp(50), dp(50), Gravity.BOTTOM or Gravity.START).apply {
-            leftMargin = dp(11); bottomMargin = dp(12)
-        })
-
-
-        status = TextView(this).apply {
-            text = "OPEN A GLB  •  Drag: orbit  •  Pinch: zoom  •  Two fingers: pan"
-            setTextColor(0xffbae6fd.toInt()); textSize = 12f; gravity = Gravity.CENTER
-            setBackgroundResource(luxe.texture3d.app.R.drawable.panel_bg)
-            setPadding(dp(16), 0, dp(16), 0)
-        }
-        status.alpha = 0f
-        root.addView(status, FrameLayout.LayoutParams(1, 1, Gravity.BOTTOM))
-        setContentView(root)
-        applyImmersiveMode()
-
-        // One Filament-native camera owner, with our low-latency touch adapter.
-        manipulator = Manipulator.Builder()
-            .targetPosition(0f, 0.7f, -4f)
-            .orbitHomePosition(4f, 3.4f, 4f)
-            // Filament defaults to 0.01. A lower value gives the deliberate,
-            // weighted response expected from a mobile sculpting viewport.
-            .orbitSpeed(0.0035f, 0.0035f)
-            .zoomSpeed(0.012f)
-            // Pan against a plane through the model target, not Filament's
-            // default z=0 plane. This makes pan usable across the viewport.
-            .groundPlane(0f, 0f, 1f, 4f)
-            .panning(true)
-            .viewport(surface.width.coerceAtLeast(1), surface.height.coerceAtLeast(1))
-            .build(Manipulator.Mode.ORBIT)
-        cameraInput.manipulator = manipulator
-        viewer = ModelViewer(surface, manipulator = manipulator)
-        loadEnvironment()
-        editorGrid = EditorGrid(
-            viewer.engine, viewer.scene,
-            readAsset("materials/luxe_grid.filamat"),
-            readAsset("materials/luxe_lines.filamat")
-        )
-        cameraInput.inputEnabled = true
+        dialog.show()
     }
 
-    private fun loadEnvironment() {
-        val ibl = readAsset("environments/shanghai_bund_2k_ibl.ktx")
-        KTX1Loader.createIndirectLight(viewer.engine, ibl).also { bundle ->
-            viewer.scene.indirectLight = bundle.indirectLight
-            viewer.indirectLightCubemap = bundle.cubemap
-            bundle.indirectLight?.intensity = 30_000f
-        }
-        // Keep the HDR only as invisible image-based lighting. The visible
-        // background is a neutral Blender-like gray and does not light models.
-        solidSkybox = Skybox.Builder()
-            .color(0.055f, 0.065f, 0.075f, 1.0f)
-            .build(viewer.engine)
-        viewer.scene.skybox = solidSkybox
-    }
-
-    private fun readAsset(path: String): ByteBuffer {
-        val bytes = assets.open(path).use { it.readBytes() }
-        return ByteBuffer.allocateDirect(bytes.size).order(ByteOrder.nativeOrder()).apply { put(bytes); flip() }
-    }
-
-    private fun resetCameraHome() {
-        if (::manipulator.isInitialized) {
-            manipulator.jumpToBookmark(manipulator.homeBookmark)
-        }
-    }
-
-    private fun handleSelectedModel(uri: Uri) {
-        if (viewer.asset == null) {
-            loadGlb(uri)
-            return
-        }
-        AlertDialog.Builder(this)
-            .setTitle("Replace current model?")
-            .setMessage("The current viewer supports one GLB project at a time.")
-            .setPositiveButton("Replace") { _, _ -> loadGlb(uri) }
-            .setNegativeButton("Cancel", null)
-            .show()
-    }
-
-    private fun loadGlb(uri: Uri) {
-        try {
-            val name = displayName(uri)
-            if (!name.lowercase().endsWith(".glb")) throw IllegalArgumentException("Please choose a .glb file")
-            status.text = "LOADING  •  $name"
-            // Empty-scene gestures must never alter the next model's pivot.
-            cameraInput.inputEnabled = false
-            manipulator.grabEnd()
-            manipulator.jumpToBookmark(manipulator.homeBookmark)
-            val fileSize = selectedFileSize(uri)
-            val safeLimit = safeGlbImportLimit()
-            if (fileSize <= 0L) {
-                throw IllegalArgumentException("Android did not provide this GLB's size")
+    private fun createProject(title:String,template:Template):DocumentFile?{
+        val root=rootDocument()?:return null
+        val safe=title.replace(Regex("[\\\\/:*?\"<>|]"),"_").trim().take(64)
+        if(safe.isBlank()){Toast.makeText(this,"Invalid project name",Toast.LENGTH_SHORT).show();return null}
+        if(root.findFile(safe)!=null){Toast.makeText(this,"A project with this name already exists",Toast.LENGTH_LONG).show();return null}
+        return runCatching{
+            val folder=root.createDirectory(safe)?:error("Could not create project folder")
+            val escapedName=safe.replace("\"","\\\"")
+            val metadata="{\"name\":\"$escapedName\",\"template\":\"${template.title}\",\"version\":1}"
+            folder.createFile("application/json","project.json")?.let{meta->
+                contentResolver.openOutputStream(meta.uri)?.use{it.write(metadata.toByteArray())}
             }
-            if (fileSize > safeLimit) {
-                throw IllegalArgumentException(
-                    "This ${formatMb(fileSize)} MB GLB exceeds this device's ${formatMb(safeLimit)} MB safe import limit"
-                )
+            template.asset?.let{assetName->
+                val out=folder.createFile("model/gltf-binary","model.glb")?:error("Could not create model file")
+                assets.open("templates/$assetName").use{input->contentResolver.openOutputStream(out.uri)?.use{output->input.copyTo(output)}?:error("Could not write template")}
             }
+            folder
+        }.onFailure{Toast.makeText(this,it.message?:"Project creation failed",Toast.LENGTH_LONG).show()}.getOrNull()
+    }
 
-            // Stream directly into one native buffer. The previous readBytes()
-            // path held a heap byte array and a direct copy at the same time.
-            val buffer = readDirectBuffer(uri, fileSize)
-            viewer.loadModelGlb(buffer)
-            if (viewer.asset == null) throw IllegalArgumentException("Filament could not parse this GLB")
-            // Normalize the asset, center it horizontally, and place its
-            // lowest bound directly on the y=0 editor ground.
-            ModelPlacement.placeOnGround(viewer.engine, viewer.asset!!)
-            manipulator.jumpToBookmark(manipulator.homeBookmark)
-            cameraInput.inputEnabled = true
-            status.text = "$name  •  ORBIT VIEW"
-        } catch (_: OutOfMemoryError) {
-            viewer.destroyModel()
-            cameraInput.inputEnabled = false
-            status.text = "MODEL TOO HEAVY"
-            Toast.makeText(
-                this,
-                "Not enough memory for this model. Try a lower-poly GLB or smaller textures.",
-                Toast.LENGTH_LONG
-            ).show()
-        } catch (e: Exception) {
-            cameraInput.inputEnabled = viewer.asset != null
-            status.text = if (viewer.asset != null) "PREVIOUS MODEL ACTIVE" else "NO MODEL LOADED"
-            Toast.makeText(this, e.message ?: "Could not load GLB", Toast.LENGTH_LONG).show()
+    private fun projectIcon(folder:DocumentFile):Int{
+        val metadata=folder.findFile("project.json")?.let{file->
+            runCatching{contentResolver.openInputStream(file.uri)?.bufferedReader()?.use{it.readText()}.orEmpty()}.getOrDefault("")
+        }.orEmpty().lowercase()
+        return when{
+            "sphere" in metadata->R.drawable.thumb_sphere
+            "cylinder" in metadata->R.drawable.thumb_cylinder
+            "capsule" in metadata->R.drawable.thumb_capsule
+            "plane" in metadata->R.drawable.thumb_plane
+            "round box" in metadata->R.drawable.thumb_round_box
+            "torus" in metadata->R.drawable.thumb_torus
+            "trolls" in metadata->R.drawable.thumb_trolls
+            "cube" in metadata->R.drawable.thumb_cube
+            else->R.drawable.thumb_empty
         }
     }
 
-    private fun selectedFileSize(uri: Uri): Long {
-        contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use {
-            if (it.moveToFirst() && !it.isNull(0)) return it.getLong(0)
-        }
-        return contentResolver.openFileDescriptor(uri, "r")?.use { it.statSize } ?: -1L
+    private fun openProject(folder:DocumentFile){
+        val intent=Intent(this,EditorActivity::class.java)
+        folder.findFile("model.glb")?.let{intent.putExtra(EditorActivity.EXTRA_PROJECT_MODEL_URI,it.uri.toString())}
+        startActivity(intent)
     }
 
-    private fun safeGlbImportLimit(): Long {
-        val memoryClassMb = (getSystemService(ACTIVITY_SERVICE) as ActivityManager).memoryClass.toLong()
-        // GLB resources expand after parsing. Keep source data below 20% of the
-        // app heap, with conservative bounds for weak and high-memory devices.
-        val limitMb = (memoryClassMb / 5L).coerceIn(32L, 128L)
-        return limitMb * 1024L * 1024L
-    }
+    private fun showFirstFolderDialog(){AlertDialog.Builder(this).setTitle("Choose Project Directory").setMessage("Select or create a folder in device storage. Luxe will save every project as a subfolder inside it.").setPositiveButton("Choose Folder"){_,_->chooseFolder.launch(null)}.setNegativeButton("Later",null).show()}
+    private fun rootUri():Uri?=prefs.getString(KEY_ROOT_URI,null)?.let(Uri::parse)
+    private fun rootDocument():DocumentFile?=rootUri()?.let{DocumentFile.fromTreeUri(this,it)}
+    private fun emptyLabel(message:String)=TextView(this).apply{text=message;gravity=Gravity.CENTER;textSize=15f;setTextColor(0xff7f9098.toInt());setPadding(0,dp(70),0,0)}
+    private fun button(label:String,action:()->Unit)=Button(this).apply{text=label;isAllCaps=false;setTextColor(0xffdff5ff.toInt());setBackgroundResource(R.drawable.panel_bg);setOnClickListener{action()}}
+    private fun dp(v:Int)=(v*resources.displayMetrics.density).toInt()
 
-    private fun readDirectBuffer(uri: Uri, size: Long): ByteBuffer {
-        if (size > Int.MAX_VALUE) throw IllegalArgumentException("GLB is too large for Android")
-        val output = ByteBuffer.allocateDirect(size.toInt()).order(ByteOrder.nativeOrder())
-        val descriptor = contentResolver.openFileDescriptor(uri, "r")
-            ?: throw IllegalStateException("The selected file could not be opened")
-        descriptor.use { pfd ->
-            FileInputStream(pfd.fileDescriptor).channel.use { channel ->
-                while (output.hasRemaining()) {
-                    if (channel.read(output) < 0) break
-                }
-            }
-        }
-        if (output.position() != size.toInt()) {
-            throw IllegalStateException("The GLB could not be read completely")
-        }
-        output.flip()
-        return output
-    }
-
-    private fun formatMb(bytes: Long) = bytes / (1024L * 1024L)
-
-    private fun displayName(uri: Uri): String {
-        contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
-            if (it.moveToFirst()) return it.getString(0)
-        }
-        return uri.lastPathSegment ?: "model.glb"
-    }
-
-
-    @Suppress("DEPRECATION")
-    private fun applyImmersiveMode() {
-        window.decorView.systemUiVisibility =
-            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
-            View.SYSTEM_UI_FLAG_FULLSCREEN or
-            View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
-            View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
-            View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
-            View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-        if (android.os.Build.VERSION.SDK_INT >= 28) {
-            window.attributes = window.attributes.apply {
-                layoutInDisplayCutoutMode =
-                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-            }
-        }
-    }
-
-    override fun onWindowFocusChanged(hasFocus: Boolean) {
-        super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) applyImmersiveMode()
-    }
-
-    override fun onResume() { super.onResume(); applyImmersiveMode(); rendering = true; Choreographer.getInstance().postFrameCallback(this) }
-    override fun onPause() { rendering = false; Choreographer.getInstance().removeFrameCallback(this); super.onPause() }
-    override fun doFrame(frameTimeNanos: Long) {
-        if (!rendering) return
-        // ModelViewer.render() reads its native Manipulator and applies the
-        // sole camera pose immediately before rendering.
-        viewer.render(frameTimeNanos)
-        Choreographer.getInstance().postFrameCallback(this)
-    }
-    private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
+    companion object { private const val KEY_ROOT_URI="project_root_uri" }
 }

@@ -63,3 +63,15 @@ The viewport remains uncluttered until tools are functional. Selection gizmos, c
 - Minor and major line intensity reduced significantly.
 - Origin marker is flush with the ground and no longer has a floating Y line.
 - Filament manipulator panning is explicitly enabled.
+
+## Project Hub launcher — 0.12.0
+
+- New landscape entry screen with Local Projects, Marketplace, Settings, and Plugin Manager tabs.
+- Non-local tabs are clearly marked Coming Soon.
+- Storage Access Framework directory selection with persisted read/write access; no broad storage permission.
+- Every project is created as a subfolder inside the user-selected directory.
+- Project metadata is written immediately to `project.json`.
+- Template model is copied to `model.glb` and opens directly in the editor.
+- New Project modal requires a name and offers Empty, Cube, Sphere, Cylinder, Capsule, Plane, Round Box, Torus, and Trolls templates.
+- Dedicated XML vector thumbnail represents every template.
+- Local project cards use the saved template thumbnail and reopen the project model.
