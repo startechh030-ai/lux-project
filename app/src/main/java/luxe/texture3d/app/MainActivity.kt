@@ -160,7 +160,6 @@ class MainActivity : AppCompatActivity() {
     }
     private fun openProject(folder:DocumentFile){startActivity(Intent(this,EditorActivity::class.java).apply{folder.findFile("model.glb")?.let{putExtra(EditorActivity.EXTRA_PROJECT_MODEL_URI,it.uri.toString())}})}
     private fun showFolderDialog(){toast("Choose a folder where Luxe should keep project subfolders");chooseFolder.launch(rootUri())}
-    private fun refreshFolderLabel(){folderText.text=rootDocument()?.name?.let{"Project folder  /  $it"}?:"No project folder selected"}
     private fun displayFolderName()=rootDocument()?.name?:"Project folder"
     private fun rootUri():Uri?=prefs.getString(KEY_ROOT_URI,null)?.let(Uri::parse)
     private fun rootDocument():DocumentFile?=rootUri()?.let{DocumentFile.fromTreeUri(this,it)}

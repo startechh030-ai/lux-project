@@ -11,8 +11,8 @@ android {
         applicationId = "luxe.texture3d.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 31
-        versionName = "0.12.1"
+        versionCode = 32
+        versionName = "0.12.2"
     }
     buildFeatures { viewBinding = false }
     packaging { jniLibs { useLegacyPackaging = false } }
