@@ -6,11 +6,7 @@ import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.net.Uri
 import android.os.Bundle
-import android.view.Gravity
-import android.view.View
-import android.view.ViewGroup
-import android.view.Window
-import android.view.WindowManager
+import android.view.*
 import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -19,154 +15,74 @@ import androidx.documentfile.provider.DocumentFile
 class MainActivity : AppCompatActivity() {
     private data class Template(val title:String,val asset:String?,val icon:Int)
     private val templates=listOf(
-        Template("Empty scene",null,R.drawable.thumb_empty), Template("Cube","cube.glb",R.drawable.thumb_cube),
-        Template("Sphere","sphere.glb",R.drawable.thumb_sphere), Template("Cylinder","cylinder.glb",R.drawable.thumb_cylinder),
-        Template("Capsule","capsule.glb",R.drawable.thumb_capsule), Template("Plane","plane.glb",R.drawable.thumb_plane),
-        Template("Round Box","round_box.glb",R.drawable.thumb_round_box), Template("Torus","torus.glb",R.drawable.thumb_torus),
-        Template("Trolls","trolls.glb",R.drawable.thumb_trolls)
-    )
-    private lateinit var projectsList:LinearLayout
-    private lateinit var folderText:TextView
+        Template("Empty scene",null,R.drawable.thumb_empty),Template("Cube","cube.glb",R.drawable.thumb_cube),
+        Template("Sphere","sphere.glb",R.drawable.thumb_sphere),Template("Cylinder","cylinder.glb",R.drawable.thumb_cylinder),
+        Template("Capsule","capsule.glb",R.drawable.thumb_capsule),Template("Plane","plane.glb",R.drawable.thumb_plane),
+        Template("Round Box","round_box.glb",R.drawable.thumb_round_box),Template("Torus","torus.glb",R.drawable.thumb_torus),
+        Template("Trolls","trolls.glb",R.drawable.thumb_trolls))
     private val prefs by lazy{getSharedPreferences("project_hub",MODE_PRIVATE)}
+    private lateinit var content:FrameLayout
+    private val nav=mutableListOf<TextView>()
+    private var activePage=0
 
     private val chooseFolder=registerForActivityResult(ActivityResultContracts.OpenDocumentTree()){uri->
-        if(uri!=null){
-            runCatching{contentResolver.takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)}
-            prefs.edit().putString(KEY_ROOT_URI,uri.toString()).apply();refreshFolderLabel();refreshProjects()
-        }
+        if(uri!=null){runCatching{contentResolver.takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)};prefs.edit().putString(KEY_ROOT_URI,uri.toString()).apply();showProjects()}
     }
 
-    override fun onCreate(savedInstanceState:Bundle?){
-        super.onCreate(savedInstanceState)
-        window.statusBarColor=0xff111111.toInt();window.navigationBarColor=0xff111111.toInt()
-        setContentView(buildUi());refreshFolderLabel();refreshProjects()
-        if(rootUri()==null) showFolderDialog()
-    }
-    override fun onResume(){super.onResume();if(::projectsList.isInitialized)refreshProjects()}
+    override fun onCreate(savedInstanceState:Bundle?){super.onCreate(savedInstanceState);window.statusBarColor=0xff020611.toInt();window.navigationBarColor=0xff020611.toInt();setContentView(buildShell());showHome();if(rootUri()==null)toast("Choose a folder before creating your first project")}
+    override fun onResume(){super.onResume();if(::content.isInitialized){if(activePage==0)showHome() else if(activePage==1)showProjects()}}
 
-    private fun buildUi():View{
-        val root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setBackgroundColor(0xff111111.toInt())}
-        root.addView(buildTopBar(),LinearLayout.LayoutParams(-1,dp(48)))
-        root.addView(buildToolBar(),LinearLayout.LayoutParams(-1,dp(44)))
-        folderText=text("",11f,0xff818181.toInt()).apply{setPadding(dp(14),dp(5),dp(14),dp(5))}
-        root.addView(folderText,LinearLayout.LayoutParams(-1,dp(30)))
-        projectsList=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(8),0,dp(8),dp(8))}
-        root.addView(ScrollView(this).apply{setBackgroundColor(0xff161616.toInt());addView(projectsList)},LinearLayout.LayoutParams(-1,0,1f))
-        return root
+    private fun buildShell():View{
+        val root=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;setBackgroundColor(0xff020611.toInt())}
+        root.addView(buildSidebar(),LinearLayout.LayoutParams(dp(210),-1))
+        content=FrameLayout(this).apply{setBackgroundColor(0xff030714.toInt())}
+        root.addView(content,LinearLayout.LayoutParams(0,-1,1f));return root
     }
 
-    private fun buildTopBar():View{
-        val bar=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(dp(12),0,dp(10),0);setBackgroundColor(0xff171717.toInt())}
-        bar.addView(ImageView(this).apply{setImageResource(R.drawable.ic_luxe_logo)},LinearLayout.LayoutParams(dp(30),dp(30)))
-        bar.addView(text("LUXE TEXTURE3D",17f,0xffe4e4e4.toInt()).apply{setTypeface(typeface,1);setPadding(dp(7),0,dp(22),0)},LinearLayout.LayoutParams(-2,-1))
-        listOf("Projects","Marketplace","Settings","Plugin Manager").forEachIndexed{i,label->
-            bar.addView(text(label,13f,if(i==0)0xff58a6ff.toInt() else 0xffa0a0a0.toInt()).apply{
-                gravity=Gravity.CENTER;setPadding(dp(13),0,dp(13),0)
-                setOnClickListener{if(i!=0)Toast.makeText(this@MainActivity,"$label — Coming soon",Toast.LENGTH_SHORT).show()}
-            },LinearLayout.LayoutParams(-2,-1))
-        }
-        bar.addView(Space(this),LinearLayout.LayoutParams(0,1,1f))
-        bar.addView(text("⚙  Settings",12f,0xffb0b0b0.toInt()).apply{gravity=Gravity.CENTER;setOnClickListener{Toast.makeText(this@MainActivity,"Settings — Coming soon",Toast.LENGTH_SHORT).show()}},LinearLayout.LayoutParams(dp(102),-1))
-        return bar
+    private fun buildSidebar():View{
+        val side=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(16),dp(16),dp(16),dp(12));setBackgroundColor(0xff050A17.toInt())}
+        val brand=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
+        brand.addView(ImageView(this).apply{setImageResource(R.drawable.luxe_icon);scaleType=ImageView.ScaleType.CENTER_INSIDE},LinearLayout.LayoutParams(dp(52),dp(52)))
+        brand.addView(label("LUXE",23f,Color.WHITE).apply{setTypeface(typeface,1);setPadding(dp(7),0,0,0)},LinearLayout.LayoutParams(0,dp(58),1f));side.addView(brand)
+        val items=listOf("⌂   Home","▣   Projects","▤   Market","⌘   Plugin","▱   Draft","♙   Teams","⚙   Settings")
+        items.forEachIndexed{i,t->val b=label(t,13f,Color.WHITE).apply{gravity=Gravity.CENTER_VERTICAL;setPadding(dp(20),0,0,0);setBackgroundResource(R.drawable.hub_nav_normal);setOnClickListener{selectPage(i)}};nav+=b;side.addView(b,LinearLayout.LayoutParams(-1,dp(54)).apply{topMargin=dp(7)})}
+        side.addView(Space(this),LinearLayout.LayoutParams(1,0,1f))
+        side.addView(label("Smart T   PRO",11f,0xffd5e7ff.toInt()),LinearLayout.LayoutParams(-1,dp(28)))
+        side.addView(label("Cloud Storage",11f,0xffb9c8df.toInt()),LinearLayout.LayoutParams(-1,dp(27)))
+        val progress=ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal).apply{progress=24;progressTintList=android.content.res.ColorStateList.valueOf(0xff3478ff.toInt())};side.addView(progress,LinearLayout.LayoutParams(-1,dp(7)))
+        return side
     }
 
-    private fun buildToolBar():View{
-        val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(dp(9),dp(5),dp(9),dp(5));setBackgroundColor(0xff202020.toInt())}
-        row.addView(smallButton("＋  Create",true){showNewProjectDialog()},LinearLayout.LayoutParams(-2,-1))
-        row.addView(smallButton("▣  Folder",false){chooseFolder.launch(rootUri())},LinearLayout.LayoutParams(-2,-1).apply{leftMargin=dp(5)})
-        row.addView(smallButton("↻  Scan",false){refreshProjects()},LinearLayout.LayoutParams(-2,-1).apply{leftMargin=dp(5)})
-        val search=EditText(this).apply{hint="Filter projects";textSize=12f;setTextColor(0xffdddddd.toInt());setHintTextColor(0xff777777.toInt());setSingleLine(true);background=getDrawable(R.drawable.hub_field_bg);setPadding(dp(10),0,dp(10),0)}
-        row.addView(search,LinearLayout.LayoutParams(0,-1,1f).apply{leftMargin=dp(7)})
-        row.addView(text("Sort:  Last Edited  ▾",12f,0xffb5b5b5.toInt()).apply{gravity=Gravity.CENTER;setBackgroundResource(R.drawable.hub_secondary_button)},LinearLayout.LayoutParams(dp(150),-1).apply{leftMargin=dp(7)})
-        return row
-    }
+    private fun selectPage(index:Int){activePage=index;nav.forEachIndexed{i,v->v.setBackgroundResource(if(i==index)R.drawable.hub_nav_selected else R.drawable.hub_nav_normal)};when(index){0->showHome();1->showProjects();else->showComingSoon(index)}}
+    private fun highlight(index:Int){activePage=index;nav.forEachIndexed{i,v->v.setBackgroundResource(if(i==index)R.drawable.hub_nav_selected else R.drawable.hub_nav_normal)}}
 
-    private fun refreshFolderLabel(){folderText.text=rootDocument()?.name?.let{"Project folder  /  $it"}?:"No project folder selected"}
-    private fun refreshProjects(){
-        projectsList.removeAllViews();val root=rootDocument()
-        if(root==null){projectsList.addView(emptyLabel("Choose a project folder to begin."));return}
-        val dirs=runCatching{root.listFiles().filter{it.isDirectory}.sortedBy{it.name?.lowercase()}}.getOrDefault(emptyList())
-        if(dirs.isEmpty()){projectsList.addView(emptyLabel("No local projects. Select Create to begin."));return}
-        dirs.forEach{projectsList.addView(projectRow(it),LinearLayout.LayoutParams(-1,dp(70)))}
-    }
+    private fun showHome(){if(!::content.isInitialized)return;highlight(0);content.removeAllViews();val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;setPadding(dp(10),dp(10),dp(10),dp(10))};val center=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL};center.addView(hero(),LinearLayout.LayoutParams(-1,dp(255)));center.addView(sectionTitle("Recent Projects","View All"){selectPage(1)},LinearLayout.LayoutParams(-1,dp(38)));center.addView(recentProjects(),LinearLayout.LayoutParams(-1,dp(170)));center.addView(sectionTitle("Marketplace","View All"){showComingSoon(2)},LinearLayout.LayoutParams(-1,dp(38)));center.addView(marketplace(),LinearLayout.LayoutParams(-1,dp(190)));row.addView(ScrollView(this).apply{isFillViewport=true;addView(center)},LinearLayout.LayoutParams(0,-1,1f));row.addView(rightDashboard(),LinearLayout.LayoutParams(dp(292),-1).apply{leftMargin=dp(10)});content.addView(row,FrameLayout.LayoutParams(-1,-1))}
 
-    private fun projectRow(dir:DocumentFile):View{
-        val model=dir.findFile("model.glb")
-        return LinearLayout(this).apply{
-            orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(dp(14),dp(7),dp(12),dp(7));setBackgroundResource(R.drawable.hub_project_row)
-            addView(ImageView(this@MainActivity).apply{setImageResource(projectIcon(dir));setColorFilter(0xffbae6fd.toInt());setPadding(dp(5),dp(5),dp(5),dp(5))},LinearLayout.LayoutParams(dp(48),dp(48)))
-            addView(LinearLayout(this@MainActivity).apply{
-                orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER_VERTICAL
-                addView(text(dir.name?:"Untitled",14f,0xffeeeeee.toInt()).apply{setTypeface(typeface,1)})
-                addView(text(if(model!=null)"${displayFolderName()} / ${dir.name}" else "Empty scene project",11f,0xff858585.toInt()))
-            },LinearLayout.LayoutParams(0,-1,1f).apply{leftMargin=dp(10)})
-            addView(text("⋮",23f,0xffa0a0a0.toInt()).apply{gravity=Gravity.CENTER},LinearLayout.LayoutParams(dp(42),-1))
-            addView(smallButton("Open",false){openProject(dir)},LinearLayout.LayoutParams(dp(82),dp(34)))
-        }
-    }
+    private fun hero():View{val frame=FrameLayout(this).apply{setBackgroundResource(R.drawable.hub_panel_bg)};frame.addView(ImageView(this).apply{setImageResource(R.drawable.header_bar);scaleType=ImageView.ScaleType.CENTER_CROP;alpha=0.92f},FrameLayout.LayoutParams(-1,-1));val words=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(22),dp(17),0,0);addView(label("WELCOME",20f,Color.WHITE).apply{setTypeface(typeface,1)});addView(label("Smart 👋",26f,0xff1685ff.toInt()).apply{setTypeface(typeface,1)});addView(Space(this@MainActivity),LinearLayout.LayoutParams(1,dp(48)));addView(label("Bring Your Textures",20f,Color.WHITE).apply{setTypeface(typeface,1)});addView(label("To Life.",22f,0xffb45cff.toInt()).apply{setTypeface(typeface,1)})};frame.addView(words,FrameLayout.LayoutParams(dp(300),-1,Gravity.START));val actions=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;addView(action("＋  New Project",true){showNewProjectDialog()},LinearLayout.LayoutParams(dp(160),dp(42)));addView(action("▣  Open Project",false){selectPage(1)},LinearLayout.LayoutParams(dp(150),dp(42)).apply{leftMargin=dp(8)})};frame.addView(actions,FrameLayout.LayoutParams(-2,dp(42),Gravity.START or Gravity.BOTTOM).apply{leftMargin=dp(22);bottomMargin=dp(16)});return frame}
 
-    private fun showNewProjectDialog(){
-        if(rootDocument()==null){showFolderDialog();return}
-        val dialog=Dialog(this);dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
-        val panel=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(22),dp(16),dp(22),dp(16));setBackgroundResource(R.drawable.hub_dialog_bg)}
-        val heading=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
-        heading.addView(text("Create New Project",16f,0xffeeeeee.toInt()),LinearLayout.LayoutParams(0,dp(36),1f))
-        heading.addView(text("×",24f,0xffc0c0c0.toInt()).apply{gravity=Gravity.CENTER;setOnClickListener{dialog.dismiss()}},LinearLayout.LayoutParams(dp(36),dp(36)))
-        panel.addView(heading)
-        panel.addView(text("Project Name",11f,0xffaaaaaa.toInt()).apply{setPadding(0,dp(8),0,dp(5))})
-        val name=EditText(this).apply{hint="My Texture Project";textSize=13f;setTextColor(0xffeeeeee.toInt());setHintTextColor(0xff666666.toInt());setSingleLine(true);background=getDrawable(R.drawable.hub_field_bg)}
-        panel.addView(name,LinearLayout.LayoutParams(-1,dp(43)))
-        val error=text("",11f,0xffffa24a.toInt()).apply{visibility=View.GONE;setPadding(dp(2),dp(4),0,0)}
-        panel.addView(error,LinearLayout.LayoutParams(-1,dp(26)))
-        panel.addView(text("Template",11f,0xffaaaaaa.toInt()).apply{setPadding(0,dp(5),0,dp(5))})
-        val templateRow=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(dp(10),dp(5),dp(10),dp(5));setBackgroundResource(R.drawable.hub_field_bg)}
-        val preview=ImageView(this).apply{setImageResource(templates[0].icon);setColorFilter(0xffbae6fd.toInt());setPadding(dp(5),dp(5),dp(5),dp(5))}
-        val spinner=Spinner(this).apply{adapter=ArrayAdapter(this@MainActivity,android.R.layout.simple_spinner_dropdown_item,templates.map{it.title})}
-        spinner.onItemSelectedListener=object:AdapterView.OnItemSelectedListener{
-            override fun onItemSelected(p:AdapterView<*>?,v:View?,pos:Int,id:Long){preview.setImageResource(templates[pos].icon)}
-            override fun onNothingSelected(p:AdapterView<*>?){}
-        }
-        templateRow.addView(preview,LinearLayout.LayoutParams(dp(56),dp(56)))
-        templateRow.addView(spinner,LinearLayout.LayoutParams(0,dp(48),1f))
-        panel.addView(templateRow,LinearLayout.LayoutParams(-1,dp(66)))
-        panel.addView(text("Project folder: ${displayFolderName()}",10f,0xff777777.toInt()).apply{setPadding(0,dp(9),0,dp(8))})
-        val actions=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.END}
-        actions.addView(smallButton("Cancel",false){dialog.dismiss()},LinearLayout.LayoutParams(dp(92),dp(38)))
-        actions.addView(smallButton("Create & Open",true){
-            val title=name.text.toString().trim()
-            if(title.isBlank()){error.text="Project name is required";error.visibility=View.VISIBLE;return@smallButton}
-            createProject(title,templates[spinner.selectedItemPosition])?.let{dialog.dismiss();openProject(it)}
-        },LinearLayout.LayoutParams(dp(132),dp(38)).apply{leftMargin=dp(8)})
-        panel.addView(actions,LinearLayout.LayoutParams(-1,dp(46)))
-        dialog.setContentView(panel);dialog.setCanceledOnTouchOutside(false);dialog.show()
-        dialog.window?.apply{setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT));addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);attributes=attributes.apply{dimAmount=0.72f};setLayout((resources.displayMetrics.widthPixels*0.62f).toInt(),ViewGroup.LayoutParams.WRAP_CONTENT)}
-    }
+    private fun recentProjects():View{val h=HorizontalScrollView(this).apply{isHorizontalScrollBarEnabled=false};val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL};val dirs=projectDirs();val images=intArrayOf(R.drawable.engine_room,R.drawable.miltaryx,R.drawable.hk47,R.drawable.kingdom);if(dirs.isEmpty())listOf("Sci-Fi Hangar","Military Soldier","Assault Rifle","Abandoned City").forEachIndexed{i,n->row.addView(imageCard(n,"Edited recently",images[i]){showNewProjectDialog()},LinearLayout.LayoutParams(dp(190),dp(160)).apply{rightMargin=dp(9)})}else dirs.take(8).forEachIndexed{i,d->row.addView(imageCard(d.name?:"Project","Local project",images[i%images.size]){openProject(d)},LinearLayout.LayoutParams(dp(190),dp(160)).apply{rightMargin=dp(9)})};h.addView(row);return h}
+    private fun marketplace():View{val h=HorizontalScrollView(this).apply{isHorizontalScrollBarEnabled=false};val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL};listOf(Triple("Sci-Fi Pack","$34.99",R.drawable.scfi_building),Triple("Military Pack","$29.99",R.drawable.miltary),Triple("Industrial Pack","$24.99",R.drawable.engine_room),Triple("Nature Pack","$19.99",R.drawable.forest),Triple("City Pack","$39.99",R.drawable.city)).forEach{(n,p,img)->row.addView(imageCard(n,p,img){toast("Marketplace — Coming soon")},LinearLayout.LayoutParams(dp(160),dp(180)).apply{rightMargin=dp(9)})};h.addView(row);return h}
 
-    private fun createProject(title:String,template:Template):DocumentFile?{
-        val root=rootDocument()?:return null;val safe=title.replace(Regex("[\\\\/:*?\"<>|]"),"_").trim().take(64)
-        if(safe.isBlank()){toast("Invalid project name");return null};if(root.findFile(safe)!=null){toast("A project with this name already exists");return null}
-        return runCatching{
-            val folder=root.createDirectory(safe)?:error("Could not create project folder")
-            val escaped=safe.replace("\"","\\\"");val metadata="{\"name\":\"$escaped\",\"template\":\"${template.title}\",\"version\":1}"
-            folder.createFile("application/json","project.json")?.let{contentResolver.openOutputStream(it.uri)?.use{out->out.write(metadata.toByteArray())}}
-            template.asset?.let{assetName->val out=folder.createFile("model/gltf-binary","model.glb")?:error("Could not create model file");assets.open("templates/$assetName").use{input->contentResolver.openOutputStream(out.uri)?.use{input.copyTo(it)}?:error("Could not write template")}}
-            folder
-        }.onFailure{toast(it.message?:"Project creation failed")}.getOrNull()
-    }
+    private fun imageCard(title:String,sub:String,image:Int,open:()->Unit):View{val card=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setBackgroundResource(R.drawable.hub_card_bg);setPadding(dp(5),dp(5),dp(5),dp(7));setOnClickListener{open()}};card.addView(ImageView(this).apply{setImageResource(image);scaleType=ImageView.ScaleType.CENTER_CROP},LinearLayout.LayoutParams(-1,0,1f));card.addView(label(title,12f,Color.WHITE).apply{setPadding(dp(5),dp(5),0,0)},LinearLayout.LayoutParams(-1,dp(28)));card.addView(label(sub,10f,0xff8d9ab1.toInt()).apply{setPadding(dp(5),0,0,0)},LinearLayout.LayoutParams(-1,dp(20)));return card}
+    private fun sectionTitle(left:String,right:String,click:()->Unit)=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;addView(label(left,14f,Color.WHITE).apply{setTypeface(typeface,1)},LinearLayout.LayoutParams(0,-1,1f));addView(label(right,11f,0xff2387ff.toInt()).apply{gravity=Gravity.CENTER;setOnClickListener{click()}},LinearLayout.LayoutParams(dp(70),-1))}
 
-    private fun projectIcon(folder:DocumentFile):Int{
-        val m=folder.findFile("project.json")?.let{runCatching{contentResolver.openInputStream(it.uri)?.bufferedReader()?.use{r->r.readText()}.orEmpty()}.getOrDefault("")}.orEmpty().lowercase()
-        return when{"sphere" in m->R.drawable.thumb_sphere;"cylinder" in m->R.drawable.thumb_cylinder;"capsule" in m->R.drawable.thumb_capsule;"plane" in m->R.drawable.thumb_plane;"round box" in m->R.drawable.thumb_round_box;"torus" in m->R.drawable.thumb_torus;"trolls" in m->R.drawable.thumb_trolls;"cube" in m->R.drawable.thumb_cube;else->R.drawable.thumb_empty}
-    }
-    private fun openProject(folder:DocumentFile){startActivity(Intent(this,EditorActivity::class.java).apply{folder.findFile("model.glb")?.let{putExtra(EditorActivity.EXTRA_PROJECT_MODEL_URI,it.uri.toString())}})}
-    private fun showFolderDialog(){toast("Choose a folder where Luxe should keep project subfolders");chooseFolder.launch(rootUri())}
-    private fun displayFolderName()=rootDocument()?.name?:"Project folder"
-    private fun rootUri():Uri?=prefs.getString(KEY_ROOT_URI,null)?.let(Uri::parse)
-    private fun rootDocument():DocumentFile?=rootUri()?.let{DocumentFile.fromTreeUri(this,it)}
-    private fun emptyLabel(msg:String)=text(msg,13f,0xff777777.toInt()).apply{gravity=Gravity.CENTER;setPadding(0,dp(70),0,0)}
-    private fun text(value:String,size:Float,color:Int)=TextView(this).apply{text=value;textSize=size;setTextColor(color);includeFontPadding=false;gravity=Gravity.CENTER_VERTICAL}
-    private fun smallButton(label:String,primary:Boolean,action:()->Unit)=TextView(this).apply{text=label;textSize=12f;gravity=Gravity.CENTER;setTextColor(if(primary)Color.WHITE else 0xffd0d0d0.toInt());setPadding(dp(12),0,dp(12),0);setBackgroundResource(if(primary)R.drawable.hub_primary_button else R.drawable.hub_secondary_button);setOnClickListener{action()}}
-    private fun toast(msg:String)=Toast.makeText(this,msg,Toast.LENGTH_LONG).show()
-    private fun dp(v:Int)=(v*resources.displayMetrics.density).toInt()
+    private fun rightDashboard():View{val scroll=ScrollView(this);val col=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL};col.addView(label("Quick Actions",13f,Color.WHITE).apply{setTypeface(typeface,1);setPadding(dp(10),0,0,0)},LinearLayout.LayoutParams(-1,dp(38)));listOf("New Texture Set" to "Start a new texture","Import 3D Model" to "Import FBX / GLB / GLTF","Material Library" to "Browse materials","Scan Device" to "Import from device").forEach{(a,b)->col.addView(quickRow(a,b),LinearLayout.LayoutParams(-1,dp(58)).apply{bottomMargin=dp(5)})};col.addView(sidePanel("News & Updates",listOf("Luxe 2.0 is Here","Marketplace Sale","AI Upscaler Released")),LinearLayout.LayoutParams(-1,dp(190)).apply{topMargin=dp(8)});col.addView(sidePanel("Installed Plugins",listOf("Texture Baker   v1.2.0 ✓","AI Upscaler   v1.0.3 ✓","Material Converter   v2.1.0 ✓","GLTF Exporter   v1.3.2 ✓")),LinearLayout.LayoutParams(-1,dp(185)).apply{topMargin=dp(8)});scroll.addView(col);return scroll}
+    private fun quickRow(a:String,b:String)=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER_VERTICAL;setPadding(dp(14),0,dp(12),0);setBackgroundResource(R.drawable.hub_card_bg);addView(label("›  $a",11f,Color.WHITE));addView(label("    $b",9f,0xff73829a.toInt()))}
+    private fun sidePanel(title:String,items:List<String>)=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(12),dp(9),dp(12),dp(8));setBackgroundResource(R.drawable.hub_panel_bg);addView(label(title,12f,Color.WHITE).apply{setTypeface(typeface,1)},LinearLayout.LayoutParams(-1,dp(27)));items.forEach{addView(label("◉  $it",10f,0xffc9d4e4.toInt()),LinearLayout.LayoutParams(-1,dp(34)))}}
+
+    private fun showProjects(){if(!::content.isInitialized)return;highlight(1);content.removeAllViews();val page=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(12),dp(10),dp(12),dp(12))};val tools=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL};tools.addView(action("＋  Create",true){showNewProjectDialog()},LinearLayout.LayoutParams(dp(112),dp(39)));tools.addView(action("▣  Folder",false){chooseFolder.launch(rootUri())},LinearLayout.LayoutParams(dp(104),dp(39)).apply{leftMargin=dp(6)});tools.addView(action("↻  Scan",false){showProjects()},LinearLayout.LayoutParams(dp(90),dp(39)).apply{leftMargin=dp(6)});val search=EditText(this).apply{hint="Filter projects";textSize=12f;setTextColor(Color.WHITE);setHintTextColor(0xff64718a.toInt());setSingleLine(true);background=getDrawable(R.drawable.hub_field_bg)};tools.addView(search,LinearLayout.LayoutParams(0,dp(39),1f).apply{leftMargin=dp(8)});page.addView(tools);page.addView(label("Project folder  /  ${displayFolderName()}",10f,0xff718096.toInt()).apply{setPadding(dp(5),dp(7),0,0)},LinearLayout.LayoutParams(-1,dp(30)));val list=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL};val dirs=projectDirs();if(dirs.isEmpty())list.addView(label("No local projects. Create your first project.",13f,0xff708099.toInt()).apply{gravity=Gravity.CENTER},LinearLayout.LayoutParams(-1,dp(100)))else dirs.forEach{list.addView(projectRow(it),LinearLayout.LayoutParams(-1,dp(68)).apply{bottomMargin=dp(5)})};page.addView(ScrollView(this).apply{addView(list)},LinearLayout.LayoutParams(-1,0,1f));content.addView(page,FrameLayout.LayoutParams(-1,-1))}
+    private fun projectRow(dir:DocumentFile)=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(dp(12),dp(6),dp(10),dp(6));setBackgroundResource(R.drawable.hub_project_row);addView(ImageView(this@MainActivity).apply{setImageResource(projectIcon(dir));setColorFilter(0xffbae6fd.toInt())},LinearLayout.LayoutParams(dp(46),dp(46)));addView(LinearLayout(this@MainActivity).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER_VERTICAL;addView(label(dir.name?:"Untitled",13f,Color.WHITE).apply{setTypeface(typeface,1)});addView(label("${displayFolderName()} / ${dir.name}",10f,0xff728099.toInt()))},LinearLayout.LayoutParams(0,-1,1f).apply{leftMargin=dp(10)});addView(label("⋮",22f,0xff8c97aa.toInt()).apply{gravity=Gravity.CENTER},LinearLayout.LayoutParams(dp(42),-1));addView(action("Open",false){openProject(dir)},LinearLayout.LayoutParams(dp(80),dp(34)))}
+    private fun showComingSoon(index:Int){highlight(index);content.removeAllViews();content.addView(label(listOf("","","Marketplace","Plugin Manager","Drafts","Teams","Settings").getOrElse(index){"Coming Soon"},24f,0xff4f8fff.toInt()).apply{gravity=Gravity.CENTER},FrameLayout.LayoutParams(-1,-1))}
+
+    private fun showNewProjectDialog(){if(rootDocument()==null){toast("Choose a project folder first");chooseFolder.launch(null);return};val d=Dialog(this);d.requestWindowFeature(Window.FEATURE_NO_TITLE);val p=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(22),dp(16),dp(22),dp(16));setBackgroundResource(R.drawable.hub_dialog_bg)};val head=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;addView(label("Create New Project",16f,Color.WHITE),LinearLayout.LayoutParams(0,dp(34),1f));addView(label("×",24f,0xffb9c2d0.toInt()).apply{gravity=Gravity.CENTER;setOnClickListener{d.dismiss()}},LinearLayout.LayoutParams(dp(34),dp(34)))};p.addView(head);p.addView(label("Project Name",11f,0xff9aa7b9.toInt()),LinearLayout.LayoutParams(-1,dp(27)));val name=EditText(this).apply{hint="My Texture Project";textSize=13f;setTextColor(Color.WHITE);setHintTextColor(0xff58657a.toInt());setSingleLine(true);background=getDrawable(R.drawable.hub_field_bg)};p.addView(name,LinearLayout.LayoutParams(-1,dp(42)));val err=label("",10f,0xffffa24a.toInt()).apply{visibility=View.GONE};p.addView(err,LinearLayout.LayoutParams(-1,dp(24)));p.addView(label("Template",11f,0xff9aa7b9.toInt()),LinearLayout.LayoutParams(-1,dp(27)));val tr=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(dp(8),dp(4),dp(8),dp(4));setBackgroundResource(R.drawable.hub_field_bg)};val preview=ImageView(this).apply{setImageResource(templates[0].icon);setColorFilter(0xffbae6fd.toInt())};val spinner=Spinner(this).apply{adapter=ArrayAdapter(this@MainActivity,android.R.layout.simple_spinner_dropdown_item,templates.map{it.title})};spinner.onItemSelectedListener=object:AdapterView.OnItemSelectedListener{override fun onItemSelected(p:AdapterView<*>?,v:View?,pos:Int,id:Long){preview.setImageResource(templates[pos].icon)};override fun onNothingSelected(p:AdapterView<*>?){}};tr.addView(preview,LinearLayout.LayoutParams(dp(52),dp(52)));tr.addView(spinner,LinearLayout.LayoutParams(0,dp(48),1f));p.addView(tr,LinearLayout.LayoutParams(-1,dp(62)));p.addView(label("Project folder: ${displayFolderName()}",10f,0xff66738a.toInt()),LinearLayout.LayoutParams(-1,dp(34)));val acts=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.END};acts.addView(action("Cancel",false){d.dismiss()},LinearLayout.LayoutParams(dp(90),dp(38)));acts.addView(action("Create & Open",true){val t=name.text.toString().trim();if(t.isBlank()){err.text="Project name is required";err.visibility=View.VISIBLE}else createProject(t,templates[spinner.selectedItemPosition])?.let{d.dismiss();openProject(it)}},LinearLayout.LayoutParams(dp(132),dp(38)).apply{leftMargin=dp(8)});p.addView(acts,LinearLayout.LayoutParams(-1,dp(46)));d.setContentView(p);d.show();d.window?.apply{setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT));addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);attributes=attributes.apply{dimAmount=.78f};setLayout((resources.displayMetrics.widthPixels*.60f).toInt(),ViewGroup.LayoutParams.WRAP_CONTENT)}}
+
+    private fun createProject(title:String,t:Template):DocumentFile?{val root=rootDocument()?:return null;val safe=title.replace(Regex("[\\\\/:*?\"<>|]"),"_").trim().take(64);if(safe.isBlank()||root.findFile(safe)!=null){toast("Invalid or duplicate project name");return null};return runCatching{val f=root.createDirectory(safe)?:error("Could not create folder");val meta="{\"name\":\"$safe\",\"template\":\"${t.title}\",\"version\":1}";f.createFile("application/json","project.json")?.let{contentResolver.openOutputStream(it.uri)?.use{o->o.write(meta.toByteArray())}};t.asset?.let{a->val out=f.createFile("model/gltf-binary","model.glb")?:error("Could not create model");assets.open("templates/$a").use{i->contentResolver.openOutputStream(out.uri)?.use{i.copyTo(it)}?:error("Could not write model")}};f}.onFailure{toast(it.message?:"Project creation failed")}.getOrNull()}
+    private fun projectIcon(f:DocumentFile):Int{val m=f.findFile("project.json")?.let{runCatching{contentResolver.openInputStream(it.uri)?.bufferedReader()?.use{r->r.readText()}.orEmpty()}.getOrDefault("")}.orEmpty().lowercase();return when{"sphere" in m->R.drawable.thumb_sphere;"cylinder" in m->R.drawable.thumb_cylinder;"capsule" in m->R.drawable.thumb_capsule;"plane" in m->R.drawable.thumb_plane;"round box" in m->R.drawable.thumb_round_box;"torus" in m->R.drawable.thumb_torus;"trolls" in m->R.drawable.thumb_trolls;"cube" in m->R.drawable.thumb_cube;else->R.drawable.thumb_empty}}
+    private fun projectDirs()=rootDocument()?.let{runCatching{it.listFiles().filter{f->f.isDirectory}.sortedBy{f->f.name?.lowercase()}}.getOrDefault(emptyList())}?:emptyList()
+    private fun openProject(f:DocumentFile){startActivity(Intent(this,EditorActivity::class.java).apply{f.findFile("model.glb")?.let{putExtra(EditorActivity.EXTRA_PROJECT_MODEL_URI,it.uri.toString())}})}
+    private fun rootUri():Uri?=prefs.getString(KEY_ROOT_URI,null)?.let(Uri::parse);private fun rootDocument():DocumentFile?=rootUri()?.let{DocumentFile.fromTreeUri(this,it)};private fun displayFolderName()=rootDocument()?.name?:"No folder selected"
+    private fun label(t:String,s:Float,c:Int)=TextView(this).apply{text=t;textSize=s;setTextColor(c);includeFontPadding=false;gravity=Gravity.CENTER_VERTICAL}
+    private fun action(t:String,primary:Boolean,go:()->Unit)=TextView(this).apply{text=t;textSize=12f;gravity=Gravity.CENTER;setTextColor(Color.WHITE);setBackgroundResource(if(primary)R.drawable.hub_primary_button else R.drawable.hub_secondary_button);setOnClickListener{go()}}
+    private fun toast(t:String)=Toast.makeText(this,t,Toast.LENGTH_LONG).show();private fun dp(v:Int)=(v*resources.displayMetrics.density).toInt()
     companion object{private const val KEY_ROOT_URI="project_root_uri"}
 }

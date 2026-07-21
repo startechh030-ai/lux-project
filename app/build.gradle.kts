@@ -11,8 +11,8 @@ android {
         applicationId = "luxe.texture3d.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 33
-        versionName = "0.12.3"
+        versionCode = 34
+        versionName = "0.13.0"
     }
     val releaseKeystorePath = System.getenv("LUXE_KEYSTORE_FILE")
     signingConfigs {
@@ -30,10 +30,12 @@ android {
             if (!releaseKeystorePath.isNullOrBlank()) {
                 signingConfig = signingConfigs.getByName("release")
             }
-            // Keep the first public build conservative. Filament and gltfio
-            // can be minified later with tested keep rules.
-            isMinifyEnabled = false
-            isShrinkResources = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
     buildFeatures { viewBinding = false }

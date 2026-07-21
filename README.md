@@ -88,3 +88,12 @@ The viewport remains uncluttered until tools are functional. Selection gizmos, c
 ## Signed release builds — 0.12.3
 
 Run **Actions → Build Signed Release APK → Run workflow**. The workflow restores the JKS from encrypted repository secrets, signs `app-release.apk`, verifies the certificate with `apksigner`, generates `SHA256SUMS.txt`, and uploads both as the `LuxeTexture3D-signed-release` artifact. Signing material is never stored in the repository.
+
+## Epic Home dashboard — 0.13.0
+
+- Home is now the default highlighted launcher section.
+- Full blue/black Luxe sidebar navigation with exclusive active-state highlighting.
+- Supplied Luxe logo, hero artwork, recent-project imagery, and marketplace placeholders are integrated as optimized local resources.
+- Functional New Project, Open Project, Projects navigation, folder selection, and real recent-project cards are retained.
+- Market, Plugin, Draft, Teams, Settings, Quick Actions, News, and Plugins are polished offline placeholders.
+- Release builds now enable R8 code optimization and resource shrinking with Filament/gltfio/JNI keep rules in `app/proguard-rules.pro`.
