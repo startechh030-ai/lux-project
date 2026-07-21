@@ -14,3 +14,4 @@ build/
 keystore.properties
 signing.properties
 keystore-base64.txt
+.env
