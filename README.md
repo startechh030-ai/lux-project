@@ -97,3 +97,7 @@ Run **Actions → Build Signed Release APK → Run workflow**. The workflow rest
 - Functional New Project, Open Project, Projects navigation, folder selection, and real recent-project cards are retained.
 - Market, Plugin, Draft, Teams, Settings, Quick Actions, News, and Plugins are polished offline placeholders.
 - Release builds now enable R8 code optimization and resource shrinking with Filament/gltfio/JNI keep rules in `app/proguard-rules.pro`.
+
+## Density-independent dashboard scaling — 0.13.1
+
+The landscape dashboard now uses a 1600×720 reference canvas scaler based on actual available window pixels. Dimensions and font sizes share the same scale factor, preventing high-DPI phones from inflating the sidebar, hero, cards, and text while preserving the same visual proportions on larger screens. The template spinner uses a custom scaled adapter. A cropped Luxe launcher icon is now declared in the Android manifest.
