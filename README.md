@@ -84,3 +84,7 @@ The viewport remains uncluttered until tools are functional. Selection gizmos, c
 - Borderless dark project rows with stronger background hierarchy.
 - Fully custom `#1e1e1e` New Project dialog instead of Android AlertDialog styling.
 - Muted bordered input, inline orange validation, compact horizontal template selector, gray Cancel button, and filled blue Create & Open button.
+
+## Signed release builds — 0.12.3
+
+Run **Actions → Build Signed Release APK → Run workflow**. The workflow restores the JKS from encrypted repository secrets, signs `app-release.apk`, verifies the certificate with `apksigner`, generates `SHA256SUMS.txt`, and uploads both as the `LuxeTexture3D-signed-release` artifact. Signing material is never stored in the repository.

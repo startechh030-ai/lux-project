@@ -11,8 +11,30 @@ android {
         applicationId = "luxe.texture3d.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 32
-        versionName = "0.12.2"
+        versionCode = 33
+        versionName = "0.12.3"
+    }
+    val releaseKeystorePath = System.getenv("LUXE_KEYSTORE_FILE")
+    signingConfigs {
+        if (!releaseKeystorePath.isNullOrBlank()) {
+            create("release") {
+                storeFile = file(releaseKeystorePath)
+                storePassword = System.getenv("LUXE_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("LUXE_KEY_ALIAS")
+                keyPassword = System.getenv("LUXE_KEY_PASSWORD")
+            }
+        }
+    }
+    buildTypes {
+        getByName("release") {
+            if (!releaseKeystorePath.isNullOrBlank()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+            // Keep the first public build conservative. Filament and gltfio
+            // can be minified later with tested keep rules.
+            isMinifyEnabled = false
+            isShrinkResources = false
+        }
     }
     buildFeatures { viewBinding = false }
     packaging { jniLibs { useLegacyPackaging = false } }

@@ -7,3 +7,10 @@ app/.cxx/
 app/build/
 build/
 .DS_Store
+
+# Never commit Android signing material.
+*.jks
+*.keystore
+keystore.properties
+signing.properties
+keystore-base64.txt
