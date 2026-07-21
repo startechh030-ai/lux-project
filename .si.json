@@ -17,6 +17,10 @@
     ".kt": {
       "enabled": false,
       "run": "kotlin-language-server"
+    },
+    ".json": {
+      "enabled": true,
+      "run": "vscode-json-language-server --stdio"
     }
   }
 }
