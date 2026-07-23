@@ -101,3 +101,7 @@ Run **Actions → Build Signed Release APK → Run workflow**. The workflow rest
 ## Density-independent dashboard scaling — 0.13.1
 
 The landscape dashboard now uses a 1600×720 reference canvas scaler based on actual available window pixels. Dimensions and font sizes share the same scale factor, preventing high-DPI phones from inflating the sidebar, hero, cards, and text while preserving the same visual proportions on larger screens. The template spinner uses a custom scaled adapter. A cropped Luxe launcher icon is now declared in the Android manifest.
+
+## Workstation Project Library — 0.14.0
+
+Home is now a dense project-library workspace inspired by Unreal/Unity hubs: narrow icon rail, flat neutral panels, compact toolbar, search/sort controls, metadata-rich project grid, and a bottom status bar. The promotional hero, welcome copy, marketplace feed, quick actions, news, and cloud upsell are removed from the active Home layout. Market and other external areas remain separate placeholder pages.
