@@ -11,8 +11,8 @@ android {
         applicationId = "luxe.texture3d.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 36
-        versionName = "0.14.0"
+        versionCode = 37
+        versionName = "0.14.1"
     }
     val releaseKeystorePath = System.getenv("LUXE_KEYSTORE_FILE")
     signingConfigs {

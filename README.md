@@ -105,3 +105,11 @@ The landscape dashboard now uses a 1600×720 reference canvas scaler based on ac
 ## Workstation Project Library — 0.14.0
 
 Home is now a dense project-library workspace inspired by Unreal/Unity hubs: narrow icon rail, flat neutral panels, compact toolbar, search/sort controls, metadata-rich project grid, and a bottom status bar. The promotional hero, welcome copy, marketplace feed, quick actions, news, and cloud upsell are removed from the active Home layout. Market and other external areas remain separate placeholder pages.
+
+## Library refinement — 0.14.1
+
+- Slightly larger icon rail and project cards with improved neutral contrast and spacing.
+- Full edge-to-edge immersive launcher with short-edge display-cutout support.
+- Project thumbnails now follow a future render-camera contract: the Hub loads `thumbnail.png` from each project when present.
+- Projects without a render-camera thumbnail use the Luxe app icon on a neutral placeholder.
+- New project metadata declares `thumbnail.png` and a nullable `renderCamera` field; no render camera is created yet.
