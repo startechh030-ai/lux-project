@@ -2,7 +2,11 @@ package luxe.texture3d.app
 
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AlertDialog
+import androidx.activity.OnBackPressedCallback
 import android.app.ActivityManager
+import android.app.Dialog
+import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
@@ -10,9 +14,12 @@ import android.view.Choreographer
 import android.view.Gravity
 import android.view.SurfaceView
 import android.view.View
+import android.view.ViewGroup
+import android.view.Window
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ImageButton
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -41,6 +48,9 @@ class EditorActivity : AppCompatActivity(), Choreographer.FrameCallback {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() = showDiscardEditorDialog()
+        })
         Utils.init()
         window.statusBarColor = android.graphics.Color.TRANSPARENT
         window.navigationBarColor = android.graphics.Color.TRANSPARENT
@@ -151,6 +161,39 @@ class EditorActivity : AppCompatActivity(), Choreographer.FrameCallback {
     private fun resetCameraHome() {
         if (::manipulator.isInitialized) {
             manipulator.jumpToBookmark(manipulator.homeBookmark)
+        }
+    }
+
+    private fun showDiscardEditorDialog() {
+        val dialog = Dialog(this)
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(22), dp(18), dp(22), dp(16))
+            setBackgroundResource(R.drawable.hub_dialog_bg)
+            addView(TextView(this@EditorActivity).apply {
+                text = "Discard unsaved changes?"; textSize = 18f; setTextColor(Color.WHITE)
+            }, LinearLayout.LayoutParams(-1, dp(36)))
+            addView(TextView(this@EditorActivity).apply {
+                text = "You are about to close the editor. Any unsaved changes will be discarded."
+                textSize = 13f; setTextColor(0xffaeb7c4.toInt())
+            }, LinearLayout.LayoutParams(-1, dp(58)))
+        }
+        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.END }
+        fun modalButton(label: String, primary: Boolean, click: () -> Unit) = TextView(this).apply {
+            text = label; textSize = 13f; gravity = Gravity.CENTER; setTextColor(Color.WHITE)
+            setBackgroundResource(if (primary) R.drawable.hub_primary_button else R.drawable.hub_secondary_button)
+            setOnClickListener { click() }
+        }
+        actions.addView(modalButton("Cancel", false) { dialog.dismiss() }, LinearLayout.LayoutParams(dp(94), dp(40)))
+        actions.addView(modalButton("Discard & Exit", true) { dialog.dismiss(); finish() }, LinearLayout.LayoutParams(dp(132), dp(40)).apply { leftMargin = dp(8) })
+        panel.addView(actions, LinearLayout.LayoutParams(-1, dp(46)))
+        dialog.setContentView(panel); dialog.setCanceledOnTouchOutside(false); dialog.show()
+        dialog.window?.apply {
+            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+            addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+            attributes = attributes.apply { dimAmount = 0.76f }
+            setLayout((resources.displayMetrics.widthPixels * 0.48f).toInt(), ViewGroup.LayoutParams.WRAP_CONTENT)
         }
     }
 

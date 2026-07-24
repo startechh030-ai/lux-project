@@ -26,6 +26,7 @@ class MainActivity : AppCompatActivity() {
         Template("Round Box","round_box.glb",R.drawable.thumb_round_box),Template("Torus","torus.glb",R.drawable.thumb_torus),
         Template("Trolls","trolls.glb",R.drawable.thumb_trolls))
     private val prefs by lazy{getSharedPreferences("project_hub",MODE_PRIVATE)}
+    private val appFiles by lazy { AppFileSystem(this) }
     // Reference-resolution scaler for the fixed landscape dashboard. Using
     // raw window pixels avoids vendor DPI differences making the same 1600×720
     // canvas appear radically larger on high-density phones.
@@ -41,7 +42,7 @@ class MainActivity : AppCompatActivity() {
         if(uri!=null){runCatching{contentResolver.takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)};prefs.edit().putString(KEY_ROOT_URI,uri.toString()).apply();showProjects()}
     }
 
-    override fun onCreate(savedInstanceState:Bundle?){super.onCreate(savedInstanceState);WindowCompat.setDecorFitsSystemWindows(window,false);window.statusBarColor=Color.TRANSPARENT;window.navigationBarColor=Color.TRANSPARENT;window.setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,WindowManager.LayoutParams.FLAG_FULLSCREEN);setContentView(buildShell());applyImmersiveMode();showHome();if(rootUri()==null)toast("Choose a folder before creating your first project")}
+    override fun onCreate(savedInstanceState:Bundle?){super.onCreate(savedInstanceState);appFiles.recoverStaging();WindowCompat.setDecorFitsSystemWindows(window,false);window.statusBarColor=Color.TRANSPARENT;window.navigationBarColor=Color.TRANSPARENT;window.setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,WindowManager.LayoutParams.FLAG_FULLSCREEN);setContentView(buildShell());applyImmersiveMode();showHome();if(rootUri()==null)toast("Choose a folder before creating your first project")}
     override fun onResume(){super.onResume();applyImmersiveMode();if(::content.isInitialized){if(activePage==0)showHome() else if(activePage==1)showProjects()}}
     override fun onWindowFocusChanged(hasFocus:Boolean){super.onWindowFocusChanged(hasFocus);if(hasFocus)applyImmersiveMode()}
 

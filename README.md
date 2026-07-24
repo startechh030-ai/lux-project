@@ -113,3 +113,11 @@ Home is now a dense project-library workspace inspired by Unreal/Unity hubs: nar
 - Project thumbnails now follow a future render-camera contract: the Hub loads `thumbnail.png` from each project when present.
 - Projects without a render-camera thumbnail use the Luxe app icon on a neutral placeholder.
 - New project metadata declares `thumbnail.png` and a nullable `renderCamera` field; no render camera is created yet.
+
+## Import/export and signing foundation — 0.15.0
+
+- All distributed GitHub builds now use one signed release workflow and the persistent JKS secrets; ephemeral debug APK artifacts were removed.
+- Workflow uploads the signed APK, SHA-256 checksum, and signing-certificate report.
+- Added canonical app-specific `imports`, `projects`, `staging`, `thumbnails`, and runtime-cache directories through `getExternalFilesDir()` / `externalCacheDir`.
+- Added a custom editor Back modal for discard confirmation.
+- Added `IMPORT_EXPORT_ARCHITECTURE.md` defining the accepted sequential Assimp queue, staging cleanup, glTF2 output, editor browser, export packaging, and memory-pressure strategy.

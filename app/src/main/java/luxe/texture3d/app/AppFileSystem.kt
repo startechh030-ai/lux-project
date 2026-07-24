@@ -1,0 +1,26 @@
+package luxe.texture3d.app
+
+import android.content.Context
+import java.io.File
+
+/** Canonical app-specific storage. Never construct /storage/emulated/0 paths manually. */
+class AppFileSystem(context: Context) {
+    val root: File = requireNotNull(context.getExternalFilesDir(null)) { "External app storage unavailable" }
+    val imports = File(root, "imports")
+    val projects = File(root, "projects")
+    val staging = File(root, "staging")
+    val runtimeCache = File(context.externalCacheDir ?: context.cacheDir, "runtime")
+    val thumbnails = File(root, "thumbnails")
+
+    init {
+        listOf(imports, projects, staging, runtimeCache, thumbnails).forEach { dir ->
+            check(dir.exists() || dir.mkdirs()) { "Unable to create ${dir.absolutePath}" }
+        }
+    }
+
+    fun recoverStaging() {
+        staging.listFiles()?.forEach { entry ->
+            if (entry.isDirectory) entry.deleteRecursively() else entry.delete()
+        }
+    }
+}
