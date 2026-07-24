@@ -121,3 +121,11 @@ Home is now a dense project-library workspace inspired by Unreal/Unity hubs: nar
 - Added canonical app-specific `imports`, `projects`, `staging`, `thumbnails`, and runtime-cache directories through `getExternalFilesDir()` / `externalCacheDir`.
 - Added a custom editor Back modal for discard confirmation.
 - Added `IMPORT_EXPORT_ARCHITECTURE.md` defining the accepted sequential Assimp queue, staging cleanup, glTF2 output, editor browser, export packaging, and memory-pressure strategy.
+
+## Assimp conversion prototype — 0.16.0
+
+- Native Assimp v5.4.3 is fetched at build time and compiled for `arm64-v8a` and `armeabi-v7a`.
+- Enabled importers: FBX, COLLADA/DAE, OBJ, STL, PLY, 3DS, DXF, and glTF/GLB.
+- JNI exports one file at a time through Assimp's `gltf2` exporter.
+- Import / Export page supports multiple Android picker selections, smallest-first serial conversion, progress rows, app-specific staging cleanup, glTF output folders, metadata, and Luxe fallback thumbnails.
+- ZIP packages, external OBJ/glTF dependencies, WorkManager recovery, USD/USDZ, and rendered thumbnails remain subsequent hardening work.

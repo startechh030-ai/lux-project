@@ -82,7 +82,7 @@ class MainActivity : AppCompatActivity() {
         highlight(navIndex);content.removeAllViews()
         val root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(14),dp(8),dp(14),0);setBackgroundColor(0xff121212.toInt())}
         val tabs=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setBackgroundColor(0xff181818.toInt())}
-        listOf("LIBRARY","TEMPLATES","IMPORT QUEUE").forEachIndexed{i,name->tabs.addView(label(name,11f,if(i==0)0xffe2e2e2.toInt() else 0xff777777.toInt()).apply{gravity=Gravity.CENTER;setBackgroundColor(if(i==0)0xff292929.toInt() else Color.TRANSPARENT);setOnClickListener{if(i!=0)toast("$name — Coming soon")}},LinearLayout.LayoutParams(dp(if(i==0)94 else 118),dp(40)))}
+        listOf("LIBRARY","TEMPLATES","IMPORT / EXPORT").forEachIndexed{i,name->tabs.addView(label(name,11f,if(i==0)0xffe2e2e2.toInt() else 0xff777777.toInt()).apply{gravity=Gravity.CENTER;setBackgroundColor(if(i==0)0xff292929.toInt() else Color.TRANSPARENT);setOnClickListener{when(i){1->toast("Templates — Coming soon");2->startActivity(Intent(this@MainActivity,ImportExportActivity::class.java))}}},LinearLayout.LayoutParams(dp(if(i==0)94 else 126),dp(40)))}
         tabs.addView(Space(this),LinearLayout.LayoutParams(0,1,1f));tabs.addView(action("＋  New Project",true){showNewProjectDialog()},LinearLayout.LayoutParams(dp(132),dp(36)))
         root.addView(tabs,LinearLayout.LayoutParams(-1,dp(42)))
 

@@ -11,8 +11,19 @@ android {
         applicationId = "luxe.texture3d.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 38
-        versionName = "0.15.0"
+        versionCode = 39
+        versionName = "0.16.0"
+        externalNativeBuild {
+            cmake { cppFlags += listOf("-std=c++17", "-O2", "-fexceptions", "-frtti") }
+        }
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
     }
     val releaseKeystorePath = System.getenv("LUXE_KEYSTORE_FILE")
     signingConfigs {
