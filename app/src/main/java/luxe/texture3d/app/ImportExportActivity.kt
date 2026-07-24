@@ -39,7 +39,7 @@ class ImportExportActivity : AppCompatActivity() {
         top.addView(button("Import Files"){picker.launch(arrayOf("*/*"))},LinearLayout.LayoutParams(dp(120),dp(38)))
         root.addView(top)
         val tabs=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;setPadding(0,dp(8),0,dp(6))}
-        listOf("Queue","Recent Imports","Recent Conversions","Recent Exports","Failed").forEachIndexed{i,t->addView(TextView(this@ImportExportActivity).apply{text=t;textSize=12f;gravity=Gravity.CENTER;setTextColor(if(i==0)0xff8bc8ff.toInt() else 0xff888888.toInt());setBackgroundColor(if(i==0)0xff1e3a5f.toInt() else 0xff1b1b1b.toInt())},LinearLayout.LayoutParams(0,dp(36),1f).apply{rightMargin=dp(3)})}
+        listOf("Queue","Recent Imports","Recent Conversions","Recent Exports","Failed").forEachIndexed{i,t->tabs.addView(TextView(this@ImportExportActivity).apply{text=t;textSize=12f;gravity=Gravity.CENTER;setTextColor(if(i==0)0xff8bc8ff.toInt() else 0xff888888.toInt());setBackgroundColor(if(i==0)0xff1e3a5f.toInt() else 0xff1b1b1b.toInt())},LinearLayout.LayoutParams(0,dp(36),1f).apply{rightMargin=dp(3)})}
         root.addView(tabs)
         subtitle=TextView(this).apply{text="Assimp ${runCatching{bridge.nativeVersion()}.getOrDefault("unavailable")} • One conversion at a time • Smallest first";textSize=11f;setTextColor(0xff777777.toInt());setPadding(dp(4),dp(6),0,dp(6))}
         root.addView(subtitle,LinearLayout.LayoutParams(-1,dp(34)))
