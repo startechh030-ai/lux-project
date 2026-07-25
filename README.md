@@ -143,3 +143,12 @@ Home is now a dense project-library workspace inspired by Unreal/Unity hubs: nar
 - Import/Export history tabs open custom history modals.
 - Screens are locked to normal landscape to prevent reverse-landscape queue UI.
 - USD/USDZ remains excluded; Blender importer is enabled experimentally.
+
+## Import stability pass — 0.17.2
+
+- Imported thumbnails are downsampled to a maximum 512px before saving and are decoded with sampling plus a 16MB Hub LRU cache.
+- Hub no longer walks complete asset directories on the UI thread to calculate card size.
+- Queue rows automatically leave the active queue after completion/failure; JSON history remains available.
+- History modal presents readable summaries instead of raw JSON.
+- ZIP packages continue converting other candidate models when one malformed candidate fails, producing partial-success history where applicable.
+- Project creation now writes directly to app-specific `files/projects`; SAF folder prompts are removed until Export is implemented.

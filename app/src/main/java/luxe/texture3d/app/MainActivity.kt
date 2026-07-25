@@ -3,7 +3,9 @@ package luxe.texture3d.app
 import android.app.Dialog
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.util.LruCache
 import android.graphics.drawable.ColorDrawable
 import android.net.Uri
 import android.os.Bundle
@@ -27,6 +29,7 @@ class MainActivity : AppCompatActivity() {
         Template("Trolls","trolls.glb",R.drawable.thumb_trolls))
     private val prefs by lazy{getSharedPreferences("project_hub",MODE_PRIVATE)}
     private val appFiles by lazy { AppFileSystem(this) }
+    private val thumbnailCache=object:LruCache<String,Bitmap>(16*1024){override fun sizeOf(key:String,value:Bitmap)=value.byteCount/1024}
     // Reference-resolution scaler for the fixed landscape dashboard. Using
     // raw window pixels avoids vendor DPI differences making the same 1600×720
     // canvas appear radically larger on high-density phones.
@@ -107,7 +110,7 @@ class MainActivity : AppCompatActivity() {
         root.addView(HorizontalScrollView(this).apply{isHorizontalScrollBarEnabled=false;addView(assetStrip)},LinearLayout.LayoutParams(-1,0,1f))
 
         val total=dirs.sumOf{it.findFile("model.glb")?.length()?:0L}
-        root.addView(label("Ready   •   ${dirs.size} Projects   •   ${formatBytes(total)} Used   •   Luxe v0.14.0",10f,0xff777777.toInt()).apply{setPadding(dp(8),0,0,0);setBackgroundColor(0xff181818.toInt())},LinearLayout.LayoutParams(-1,dp(28)))
+        root.addView(label("Ready   •   ${dirs.size} Projects   •   ${formatBytes(total)} Used   •   Luxe v${appVersion()}",10f,0xff777777.toInt()).apply{setPadding(dp(8),0,0,0);setBackgroundColor(0xff181818.toInt())},LinearLayout.LayoutParams(-1,dp(28)))
         content.addView(root,FrameLayout.LayoutParams(-1,-1))
     }
 
@@ -115,9 +118,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun assetCard(dir:java.io.File):View=LinearLayout(this).apply{
         orientation=LinearLayout.VERTICAL;setPadding(dp(7),dp(7),dp(7),dp(7));setBackgroundResource(R.drawable.hub_card_bg);setOnClickListener{startActivity(Intent(this@MainActivity,AssetLibraryActivity::class.java).putExtra(AssetLibraryActivity.EXTRA_ASSET_PATH,dir.absolutePath))}
-        addView(ImageView(this@MainActivity).apply{val image=java.io.File(dir,"thumbnail.png");val bitmap=runCatching{BitmapFactory.decodeFile(image.absolutePath)}.getOrNull();if(bitmap!=null){setImageBitmap(bitmap);scaleType=ImageView.ScaleType.CENTER_CROP}else{setImageResource(R.drawable.luxe_launcher);scaleType=ImageView.ScaleType.CENTER_INSIDE;setPadding(dp(20),dp(12),dp(20),dp(12))}},LinearLayout.LayoutParams(-1,0,1f))
+        addView(ImageView(this@MainActivity).apply{val bitmap=loadThumbnailBitmap(java.io.File(dir,"thumbnail.png"));if(bitmap!=null){setImageBitmap(bitmap);scaleType=ImageView.ScaleType.CENTER_CROP}else{setImageResource(R.drawable.luxe_launcher);scaleType=ImageView.ScaleType.CENTER_INSIDE;setPadding(dp(20),dp(12),dp(20),dp(12))}},LinearLayout.LayoutParams(-1,0,1f))
         addView(label(dir.name.substringBeforeLast('-'),11f,0xffdedede.toInt()).apply{setTypeface(typeface,1)},LinearLayout.LayoutParams(-1,dp(24)))
-        addView(label("glTF asset  •  ${formatBytes(dir.walkTopDown().filter{it.isFile}.sumOf{it.length()})}",9f,0xff777777.toInt()),LinearLayout.LayoutParams(-1,dp(20)))
+        addView(label("glTF asset  •  ${formatBytes((java.io.File(dir,"model.gltf").length()+java.io.File(dir,"model.bin").length()))}",9f,0xff777777.toInt()),LinearLayout.LayoutParams(-1,dp(20)))
     }
 
     private fun workstationProjectCard(dir:DocumentFile):View{
@@ -163,9 +166,16 @@ class MainActivity : AppCompatActivity() {
         }.onFailure{folder.deleteRecursively();toast(it.message?:"Project creation failed")}.getOrNull()
     }
 
+    private fun loadThumbnailBitmap(file:java.io.File):Bitmap?{
+        if(!file.isFile)return null;thumbnailCache.get(file.absolutePath)?.let{return it}
+        val bounds=BitmapFactory.Options().apply{inJustDecodeBounds=true};BitmapFactory.decodeFile(file.absolutePath,bounds)
+        var sample=1;while(bounds.outWidth/sample>512||bounds.outHeight/sample>512)sample*=2
+        return BitmapFactory.decodeFile(file.absolutePath,BitmapFactory.Options().apply{inSampleSize=sample})?.also{thumbnailCache.put(file.absolutePath,it)}
+    }
+
     private fun loadProjectThumbnail(view:ImageView,folder:DocumentFile){
         val thumbnail=folder.findFile("thumbnail.png")
-        val bitmap=thumbnail?.let{runCatching{contentResolver.openInputStream(it.uri)?.use(BitmapFactory::decodeStream)}.getOrNull()}
+        val bitmap=thumbnail?.uri?.path?.let{loadThumbnailBitmap(java.io.File(it))} ?: thumbnail?.let{runCatching{contentResolver.openInputStream(it.uri)?.use(BitmapFactory::decodeStream)}.getOrNull()}
         if(bitmap!=null){view.setImageBitmap(bitmap);view.scaleType=ImageView.ScaleType.CENTER_CROP;view.setPadding(0,0,0,0);view.clearColorFilter()}
         else{view.setImageResource(R.drawable.luxe_launcher);view.scaleType=ImageView.ScaleType.CENTER_INSIDE;view.setPadding(dp(22),dp(14),dp(22),dp(14));view.clearColorFilter()}
     }
@@ -185,6 +195,7 @@ class MainActivity : AppCompatActivity() {
     private fun spinnerText(value:String)=label(value,12f,Color.WHITE).apply{setPadding(dp(10),0,dp(10),0)}
     private fun label(t:String,s:Float,c:Int)=TextView(this).apply{text=t;setTextSize(TypedValue.COMPLEX_UNIT_PX,s*1.25f*uiScale);setTextColor(c);includeFontPadding=false;gravity=Gravity.CENTER_VERTICAL}
     private fun action(t:String,primary:Boolean,go:()->Unit)=TextView(this).apply{text=t;setTextSize(TypedValue.COMPLEX_UNIT_PX,15f*uiScale);gravity=Gravity.CENTER;setTextColor(Color.WHITE);setBackgroundResource(if(primary)R.drawable.hub_primary_button else R.drawable.hub_secondary_button);setOnClickListener{go()}}
+    private fun appVersion()=runCatching{packageManager.getPackageInfo(packageName,0).versionName}.getOrDefault("")
     private fun toast(t:String)=Toast.makeText(this,t,Toast.LENGTH_LONG).show();private fun dp(v:Int)=(v*uiScale).roundToInt()
     companion object{private const val KEY_ROOT_URI="project_root_uri"}
 }

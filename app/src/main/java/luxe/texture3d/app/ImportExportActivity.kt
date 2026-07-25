@@ -66,10 +66,12 @@ class ImportExportActivity : AppCompatActivity() {
         val history=files.importHistory.listFiles()?.sortedByDescending{it.lastModified()}?:emptyList()
         val selected=when(section){"Failed"->history.filter{runCatching{it.readText().contains("\\\"status\\\":\\\"failed\\\"")}.getOrDefault(false)};"Recent Exports"->emptyList();else->history}
         if(selected.isEmpty())list.addView(TextView(this).apply{text="No history yet";textSize=13f;gravity=Gravity.CENTER;setTextColor(0xff777777.toInt())},LinearLayout.LayoutParams(-1,dp(90)))
-        else selected.take(100).forEach{file->list.addView(TextView(this).apply{text=runCatching{file.readText()}.getOrDefault(file.name);textSize=10f;setTextColor(0xffb7c0cf.toInt());setPadding(dp(8),dp(6),dp(8),dp(6));setBackgroundResource(R.drawable.hub_project_row)},LinearLayout.LayoutParams(-1,dp(70)).apply{bottomMargin=dp(4)})}
+        else selected.take(100).forEach{file->list.addView(TextView(this).apply{text=historySummary(file);textSize=11f;setTextColor(0xffb7c0cf.toInt());setPadding(dp(10),dp(7),dp(10),dp(7));setBackgroundResource(R.drawable.hub_project_row)},LinearLayout.LayoutParams(-1,dp(70)).apply{bottomMargin=dp(4)})}
         panel.addView(ScrollView(this).apply{addView(list)},LinearLayout.LayoutParams(-1,0,1f));dialog.setContentView(panel);dialog.show()
         dialog.window?.apply{setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT));addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);attributes=attributes.apply{dimAmount=.76f};setLayout((resources.displayMetrics.widthPixels*.78f).toInt(),(resources.displayMetrics.heightPixels*.78f).toInt())}
     }
+
+    private fun historySummary(file:File):String=runCatching{val j=JSONObject(file.readText());val name=j.optString("sourceName","Unknown");val state=j.optString("status");val models=j.optInt("detectedModels");val textures=j.optInt("textureCount");val duration=j.optLong("durationMs");val size=j.optLong("outputBytes");val error=j.optString("error");buildString{append(name).append("   •   ").append(state.uppercase());append("\n").append(models).append(" model(s)   •   ").append(textures).append(" texture(s)   •   ").append(format(size)).append("   •   ").append("%.1fs".format(duration/1000f));if(error.isNotBlank())append("\n").append(error)}}.getOrDefault(file.name)
 
     private fun inspect(uri:Uri):Item{
         var name=uri.lastPathSegment?:"model";var size=-1L
@@ -88,6 +90,7 @@ class ImportExportActivity : AppCompatActivity() {
                 if(Thread.currentThread().isInterrupted)return@execute
                 val row=rows.getValue(item);status(row,"Staging",8)
                 convertOne(item,row,index+1,jobs.size,resources)
+                runOnUiThread{row.root.postDelayed({queue.removeView(row.root)},1400L)}
             }
             runOnUiThread{subtitle.text="Queue complete • Assets: ${files.assets.absolutePath}"}
         }
@@ -112,26 +115,24 @@ class ImportExportActivity : AppCompatActivity() {
                 if(ext !in supported)error("Unsupported .$ext")
                 candidates=listOf(source)
             }
+            val candidateErrors=mutableListOf<String>()
             candidates.forEachIndexed{candidateIndex,candidate->
                 status(row,"Converting ${candidateIndex+1}/${candidates.size} • Queue $position/$total",25+(candidateIndex*55/candidates.size))
                 val output=File(files.assets,"${safeName(candidate.nameWithoutExtension)}-${System.currentTimeMillis()}-$candidateIndex");output.mkdirs()
-                copyResources(candidate.parentFile?:job,output).also{textureCount+=it}
-                val nativeError=bridge.nativeConvertToGltf(candidate.absolutePath,output.absolutePath)
-                if(nativeError.isNotEmpty()){output.deleteRecursively();throw IllegalStateException(nativeError)}
-                createBestThumbnail(candidate.parentFile?:job,File(output,"thumbnail.png"))
-                val assetMetadata=JSONObject()
-                    .put("id",output.name)
-                    .put("displayName",candidate.name)
-                    .put("sourceFormat",candidate.extension.lowercase())
-                    .put("outputFormat","gltf2")
-                    .put("model","model.gltf")
-                    .put("thumbnail","thumbnail.png")
-                    .put("status","ready")
-                File(output,"asset.json").writeText(assetMetadata.toString())
-                outputBytes+=output.walkTopDown().filter{it.isFile}.sumOf{it.length()};created+=output.name
+                runCatching{
+                    val copiedTextures=copyResources(candidate.parentFile?:job,output)
+                    val nativeError=bridge.nativeConvertToGltf(candidate.absolutePath,output.absolutePath)
+                    if(nativeError.isNotEmpty())throw IllegalStateException(nativeError)
+                    createBestThumbnail(candidate.parentFile?:job,File(output,"thumbnail.png"))
+                    val assetMetadata=JSONObject().put("id",output.name).put("displayName",candidate.name).put("sourceFormat",candidate.extension.lowercase()).put("outputFormat","gltf2").put("model","model.gltf").put("thumbnail","thumbnail.png").put("status","ready")
+                    File(output,"asset.json").writeText(assetMetadata.toString())
+                    textureCount+=copiedTextures;outputBytes+=output.walkTopDown().filter{it.isFile}.sumOf{it.length()};created+=output.name
+                }.onFailure{output.deleteRecursively();candidateErrors+="${candidate.name}: ${it.message}"}
             }
-            val duration=System.currentTimeMillis()-started;writeHistory(item,ext,created,textureCount,duration,memoryBefore,outputBytes,"completed",null)
-            status(row,"Completed • ${created.size} asset(s)",100)
+            if(created.isEmpty())error(candidateErrors.joinToString(" | ").ifBlank{"No model could be converted"})
+            val duration=System.currentTimeMillis()-started;val state=if(candidateErrors.isEmpty())"completed" else "partial"
+            writeHistory(item,ext,created,textureCount,duration,memoryBefore,outputBytes,state,candidateErrors.joinToString(" | ").takeIf{it.isNotBlank()})
+            status(row,"${if(state=="partial")"Partial" else "Completed"} • ${created.size} asset(s)",100)
         }catch(t:Throwable){writeHistory(item,ext,created,textureCount,System.currentTimeMillis()-started,memoryBefore,outputBytes,"failed",t.message);status(row,t.message?:"Conversion failed",100,true)}
         finally{job.deleteRecursively();runCatching{bridge.nativeCancel()};System.gc()}
     }
@@ -147,8 +148,18 @@ class ImportExportActivity : AppCompatActivity() {
 
     private fun createBestThumbnail(searchRoot:File,out:File){
         val image=searchRoot.walkTopDown().firstOrNull{it.isFile&&it.extension.lowercase() in setOf("png","jpg","jpeg","webp","bmp")}
-        val bitmap=image?.let{runCatching{BitmapFactory.decodeFile(it.absolutePath)}.getOrNull()}
-        if(bitmap!=null){FileOutputStream(out).use{bitmap.compress(Bitmap.CompressFormat.PNG,88,it)};bitmap.recycle()}else createFallbackThumbnail(out)
+        val bitmap=image?.let{decodeSampled(it,512)}
+        if(bitmap!=null){
+            val scale=minOf(1f,512f/maxOf(bitmap.width,bitmap.height));val w=(bitmap.width*scale).toInt().coerceAtLeast(1);val h=(bitmap.height*scale).toInt().coerceAtLeast(1)
+            val thumb=if(w!=bitmap.width||h!=bitmap.height)Bitmap.createScaledBitmap(bitmap,w,h,true)else bitmap
+            FileOutputStream(out).use{thumb.compress(Bitmap.CompressFormat.PNG,100,it)}
+            if(thumb!==bitmap)thumb.recycle();bitmap.recycle()
+        }else createFallbackThumbnail(out)
+    }
+    private fun decodeSampled(file:File,max:Int):Bitmap?{
+        val bounds=BitmapFactory.Options().apply{inJustDecodeBounds=true};BitmapFactory.decodeFile(file.absolutePath,bounds)
+        var sample=1;while(bounds.outWidth/sample>max*2||bounds.outHeight/sample>max*2)sample*=2
+        return BitmapFactory.decodeFile(file.absolutePath,BitmapFactory.Options().apply{inSampleSize=sample})
     }
 
     private fun writeHistory(item:Item,format:String,assetIds:List<String>,textures:Int,duration:Long,memoryBefore:Long,outputBytes:Long,state:String,error:String?){
@@ -169,14 +180,14 @@ class ImportExportActivity : AppCompatActivity() {
     }
     private fun usedMemory()=Runtime.getRuntime().totalMemory()-Runtime.getRuntime().freeMemory()
 
-    private data class ProgressRow(val status:TextView,val bar:ProgressBar)
+    private data class ProgressRow(val root:View,val status:TextView,val bar:ProgressBar)
     private fun addRow(item:Item):ProgressRow{
         val card=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(12),dp(8),dp(12),dp(8));setBackgroundResource(R.drawable.hub_project_row)}
         val title=TextView(this).apply{text="${item.name}   ${format(item.size)}";textSize=13f;setTextColor(0xffdddddd.toInt())}
         val status=TextView(this).apply{text="Waiting";textSize=11f;setTextColor(0xff888888.toInt())}
         val bar=ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal).apply{max=100;progress=0;progressTintList=android.content.res.ColorStateList.valueOf(0xff3b82f6.toInt())}
         card.addView(title);card.addView(status);card.addView(bar,LinearLayout.LayoutParams(-1,dp(5)).apply{topMargin=dp(6)})
-        queue.addView(card,LinearLayout.LayoutParams(-1,dp(74)).apply{bottomMargin=dp(5)});return ProgressRow(status,bar)
+        queue.addView(card,LinearLayout.LayoutParams(-1,dp(74)).apply{bottomMargin=dp(5)});return ProgressRow(card,status,bar)
     }
     private fun status(row:ProgressRow,text:String,progress:Int,failed:Boolean=false)=runOnUiThread{row.status.text=text;row.status.setTextColor(if(failed)0xffff8a65.toInt() else 0xff8fa0b8.toInt());row.bar.progressTintList=android.content.res.ColorStateList.valueOf(if(failed)0xffd85b4a.toInt() else if(progress>=100)0xff3aa66b.toInt() else 0xff3b82f6.toInt());row.bar.progress=progress}
     private fun createFallbackThumbnail(out:File){val bitmap=BitmapFactory.decodeResource(resources,R.drawable.luxe_launcher);FileOutputStream(out).use{bitmap.compress(Bitmap.CompressFormat.PNG,90,it)};bitmap.recycle()}
