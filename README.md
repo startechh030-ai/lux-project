@@ -129,3 +129,17 @@ Home is now a dense project-library workspace inspired by Unreal/Unity hubs: nar
 - JNI exports one file at a time through Assimp's `gltf2` exporter.
 - Import / Export page supports multiple Android picker selections, smallest-first serial conversion, progress rows, app-specific staging cleanup, glTF output folders, metadata, and Luxe fallback thumbnails.
 - ZIP packages, external OBJ/glTF dependencies, WorkManager recovery, USD/USDZ, and rendered thumbnails remain subsequent hardening work.
+
+## Recursive packages and internal libraries — 0.17.0
+
+- Project creation now uses app-specific `files/projects`; startup no longer asks for a SAF folder.
+- Added `files/assets` and import-history storage.
+- ZIP imports are securely scanned recursively through nested archives with path, depth, entry-count, and expanded-size limits.
+- Every supported 3D candidate in a package is converted into a separate asset.
+- Selected and packaged texture/resource files are staged beside models and copied into asset output.
+- Import history records source/output sizes, model and texture counts, duration, memory delta, status, errors, and asset IDs.
+- Home shows horizontal Projects and My Assets sections with View All actions.
+- Added full-screen Asset Library; the editor folder button opens it.
+- Import/Export history tabs open custom history modals.
+- Screens are locked to normal landscape to prevent reverse-landscape queue UI.
+- USD/USDZ remains excluded; Blender importer is enabled experimentally.

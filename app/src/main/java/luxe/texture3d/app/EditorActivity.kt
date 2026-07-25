@@ -28,6 +28,7 @@ import com.google.android.filament.utils.KTX1Loader
 import com.google.android.filament.utils.Manipulator
 import com.google.android.filament.utils.ModelViewer
 import com.google.android.filament.utils.Utils
+import java.io.File
 import java.io.FileInputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -78,7 +79,7 @@ class EditorActivity : AppCompatActivity(), Choreographer.FrameCallback {
             setBackgroundResource(luxe.texture3d.app.R.drawable.panel_bg)
             setColorFilter(0xffbae6fd.toInt())
             setPadding(dp(12), dp(12), dp(12), dp(12))
-            setOnClickListener { openModel.launch(arrayOf("model/gltf-binary", "application/octet-stream", "*/*")) }
+            setOnClickListener { startActivity(android.content.Intent(this@EditorActivity, AssetLibraryActivity::class.java)) }
         }
         root.addView(open, FrameLayout.LayoutParams(dp(52), dp(52), Gravity.TOP or Gravity.START).apply {
             leftMargin = dp(10); topMargin = dp(10)
@@ -258,6 +259,7 @@ class EditorActivity : AppCompatActivity(), Choreographer.FrameCallback {
     }
 
     private fun selectedFileSize(uri: Uri): Long {
+        if (uri.scheme == "file") return uri.path?.let(::File)?.length() ?: -1L
         contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use {
             if (it.moveToFirst() && !it.isNull(0)) return it.getLong(0)
         }
@@ -275,14 +277,15 @@ class EditorActivity : AppCompatActivity(), Choreographer.FrameCallback {
     private fun readDirectBuffer(uri: Uri, size: Long): ByteBuffer {
         if (size > Int.MAX_VALUE) throw IllegalArgumentException("GLB is too large for Android")
         val output = ByteBuffer.allocateDirect(size.toInt()).order(ByteOrder.nativeOrder())
-        val descriptor = contentResolver.openFileDescriptor(uri, "r")
-            ?: throw IllegalStateException("The selected file could not be opened")
-        descriptor.use { pfd ->
-            FileInputStream(pfd.fileDescriptor).channel.use { channel ->
-                while (output.hasRemaining()) {
-                    if (channel.read(output) < 0) break
-                }
-            }
+        if (uri.scheme == "file") {
+            val file = uri.path?.let(::File) ?: throw IllegalStateException("Invalid project model path")
+            FileInputStream(file).channel.use { channel -> while (output.hasRemaining()) { if (channel.read(output) < 0) break } }
+        } else {
+            val descriptor = contentResolver.openFileDescriptor(uri, "r")
+                ?: throw IllegalStateException("The selected file could not be opened")
+            descriptor.use { pfd -> FileInputStream(pfd.fileDescriptor).channel.use { channel ->
+                while (output.hasRemaining()) { if (channel.read(output) < 0) break }
+            }}
         }
         if (output.position() != size.toInt()) {
             throw IllegalStateException("The GLB could not be read completely")
@@ -294,6 +297,7 @@ class EditorActivity : AppCompatActivity(), Choreographer.FrameCallback {
     private fun formatMb(bytes: Long) = bytes / (1024L * 1024L)
 
     private fun displayName(uri: Uri): String {
+        if (uri.scheme == "file") return uri.path?.let(::File)?.name ?: "model.glb"
         contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
             if (it.moveToFirst()) return it.getString(0)
         }

@@ -7,13 +7,15 @@ import java.io.File
 class AppFileSystem(context: Context) {
     val root: File = requireNotNull(context.getExternalFilesDir(null)) { "External app storage unavailable" }
     val imports = File(root, "imports")
+    val importHistory = File(imports, "history")
+    val assets = File(root, "assets")
     val projects = File(root, "projects")
     val staging = File(root, "staging")
     val runtimeCache = File(context.externalCacheDir ?: context.cacheDir, "runtime")
     val thumbnails = File(root, "thumbnails")
 
     init {
-        listOf(imports, projects, staging, runtimeCache, thumbnails).forEach { dir ->
+        listOf(imports, importHistory, assets, projects, staging, runtimeCache, thumbnails).forEach { dir ->
             check(dir.exists() || dir.mkdirs()) { "Unable to create ${dir.absolutePath}" }
         }
     }
