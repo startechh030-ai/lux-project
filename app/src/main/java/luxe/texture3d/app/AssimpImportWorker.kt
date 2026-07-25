@@ -28,8 +28,6 @@ class AssimpImportWorker(context:Context,params:WorkerParameters):CoroutineWorke
         runCatching{java.io.File(AppFileSystem(applicationContext).importHistory,"$id.json").writeText(history.toString())}
         if(result.state=="FAILED")Result.failure(workDataOf("error" to result.error))else Result.success(workDataOf("assets" to assets))
     }
-    override fun onStopped(){runCatching{AssimpBridge().nativeCancel()};super.onStopped()}
-
     private fun foreground(name:String,progress:Int,message:String):ForegroundInfo{
         val channel="luxe_imports";val manager=applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.createNotificationChannel(NotificationChannel(channel,"Luxe Imports",NotificationManager.IMPORTANCE_LOW))
