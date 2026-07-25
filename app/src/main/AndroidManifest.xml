@@ -1,6 +1,10 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-feature android:glEsVersion="0x00030000" android:required="true" />
     <application android:theme="@style/Theme.LuxeTexture3D" android:label="Luxe Texture3D" android:icon="@drawable/luxe_launcher" android:roundIcon="@drawable/luxe_launcher" android:allowBackup="true" android:supportsRtl="true">
+        <service android:name="androidx.work.impl.foreground.SystemForegroundService" android:foregroundServiceType="dataSync" tools:node="merge" />
         <activity android:name=".AssetLibraryActivity" android:screenOrientation="landscape" android:exported="false" />
         <activity android:name=".ImportExportActivity" android:screenOrientation="landscape" android:exported="false" />
         <activity android:name=".EditorActivity" android:screenOrientation="landscape" android:configChanges="orientation|screenSize|keyboardHidden" android:exported="false" />

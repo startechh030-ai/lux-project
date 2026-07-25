@@ -152,3 +152,12 @@ Home is now a dense project-library workspace inspired by Unreal/Unity hubs: nar
 - History modal presents readable summaries instead of raw JSON.
 - ZIP packages continue converting other candidate models when one malformed candidate fails, producing partial-success history where applicable.
 - Project creation now writes directly to app-specific `files/projects`; SAF folder prompts are removed until Export is implemented.
+
+## Persistent import queue — 0.18.0
+
+- Room stores import jobs, progress, state, errors, resource URIs, and generated asset IDs.
+- WorkManager runs a unique sequential Assimp queue that survives Activity recreation and process restart.
+- Picker URI permissions are persisted before work is enqueued.
+- Long conversions run as foreground data-sync work with a low-priority notification.
+- Queue UI observes database state and supports cancellation, persistent history, retries-ready state data, and restart-safe progress.
+- Completed/partial/failed jobs are stored both in Room and lightweight JSON history files.
