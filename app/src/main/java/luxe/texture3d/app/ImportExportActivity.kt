@@ -20,6 +20,8 @@ import java.io.File
 import java.io.FileOutputStream
 import java.util.UUID
 import java.util.concurrent.Executors
+import org.json.JSONArray
+import org.json.JSONObject
 
 class ImportExportActivity : AppCompatActivity() {
     private data class Item(val uri:Uri,val name:String,val size:Long)
@@ -117,7 +119,15 @@ class ImportExportActivity : AppCompatActivity() {
                 val nativeError=bridge.nativeConvertToGltf(candidate.absolutePath,output.absolutePath)
                 if(nativeError.isNotEmpty()){output.deleteRecursively();throw IllegalStateException(nativeError)}
                 createBestThumbnail(candidate.parentFile?:job,File(output,"thumbnail.png"))
-                File(output,"asset.json").writeText("{\"id\":\"${output.name}\",\"displayName\":\"${candidate.name.replace("\"","_")}\",\"sourceFormat\":\"${candidate.extension.lowercase()}\",\"outputFormat\":\"gltf2\",\"model\":\"model.gltf\",\"thumbnail\":\"thumbnail.png\",\"status\":\"ready\"}")
+                val assetMetadata=JSONObject()
+                    .put("id",output.name)
+                    .put("displayName",candidate.name)
+                    .put("sourceFormat",candidate.extension.lowercase())
+                    .put("outputFormat","gltf2")
+                    .put("model","model.gltf")
+                    .put("thumbnail","thumbnail.png")
+                    .put("status","ready")
+                File(output,"asset.json").writeText(assetMetadata.toString())
                 outputBytes+=output.walkTopDown().filter{it.isFile}.sumOf{it.length()};created+=output.name
             }
             val duration=System.currentTimeMillis()-started;writeHistory(item,ext,created,textureCount,duration,memoryBefore,outputBytes,"completed",null)
@@ -142,8 +152,20 @@ class ImportExportActivity : AppCompatActivity() {
     }
 
     private fun writeHistory(item:Item,format:String,assetIds:List<String>,textures:Int,duration:Long,memoryBefore:Long,outputBytes:Long,state:String,error:String?){
-        val id="${System.currentTimeMillis()}-${UUID.randomUUID()}";val safeError=(error?:"").replace("\","/").replace("\"","'")
-        File(files.importHistory,"$id.json").writeText("{\"sourceName\":\"${item.name.replace("\"","_")}\",\"sourceFormat\":\"$format\",\"detectedModels\":${assetIds.size},\"textureCount\":$textures,\"sourceBytes\":${item.size},\"outputBytes\":$outputBytes,\"durationMs\":$duration,\"memoryDeltaBytes\":${(usedMemory()-memoryBefore).coerceAtLeast(0)},\"status\":\"$state\",\"error\":\"$safeError\",\"assetIds\":[${assetIds.joinToString(","){"\"$it\""}}]}")
+        val id="${System.currentTimeMillis()}-${UUID.randomUUID()}"
+        val json=JSONObject()
+            .put("sourceName",item.name)
+            .put("sourceFormat",format)
+            .put("detectedModels",assetIds.size)
+            .put("textureCount",textures)
+            .put("sourceBytes",item.size)
+            .put("outputBytes",outputBytes)
+            .put("durationMs",duration)
+            .put("memoryDeltaBytes",(usedMemory()-memoryBefore).coerceAtLeast(0))
+            .put("status",state)
+            .put("error",error?:"")
+            .put("assetIds",JSONArray(assetIds))
+        File(files.importHistory,"$id.json").writeText(json.toString())
     }
     private fun usedMemory()=Runtime.getRuntime().totalMemory()-Runtime.getRuntime().freeMemory()
 
