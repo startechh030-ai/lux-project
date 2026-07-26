@@ -30,6 +30,9 @@ interface ImportJobDao {
     @Query("SELECT * FROM import_jobs WHERE id=:id LIMIT 1")
     suspend fun get(id:String):ImportJob?
 
+    @Query("SELECT * FROM import_jobs WHERE state IN ('RUNNING','WAITING') ORDER BY CASE state WHEN 'RUNNING' THEN 0 ELSE 1 END, sourceSize ASC, createdAt ASC LIMIT 1")
+    suspend fun nextPending():ImportJob?
+
     @Insert(onConflict=OnConflictStrategy.REPLACE)
     suspend fun put(job:ImportJob)
 

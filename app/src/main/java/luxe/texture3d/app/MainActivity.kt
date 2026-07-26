@@ -43,7 +43,7 @@ class MainActivity : AppCompatActivity() {
 
 
 
-    override fun onCreate(savedInstanceState:Bundle?){super.onCreate(savedInstanceState);appFiles.recoverStaging();WindowCompat.setDecorFitsSystemWindows(window,false);window.statusBarColor=Color.TRANSPARENT;window.navigationBarColor=Color.TRANSPARENT;window.setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,WindowManager.LayoutParams.FLAG_FULLSCREEN);setContentView(buildShell());applyImmersiveMode();showHome()}
+    override fun onCreate(savedInstanceState:Bundle?){super.onCreate(savedInstanceState);appFiles.recoverStaging();ImportQueueScheduler.ensureRunning(this);WindowCompat.setDecorFitsSystemWindows(window,false);window.statusBarColor=Color.TRANSPARENT;window.navigationBarColor=Color.TRANSPARENT;window.setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,WindowManager.LayoutParams.FLAG_FULLSCREEN);setContentView(buildShell());applyImmersiveMode();showHome()}
     override fun onResume(){super.onResume();applyImmersiveMode();if(::content.isInitialized){if(activePage==0)showHome() else if(activePage==1)showProjects()}}
     override fun onWindowFocusChanged(hasFocus:Boolean){super.onWindowFocusChanged(hasFocus);if(hasFocus)applyImmersiveMode()}
 

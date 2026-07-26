@@ -161,3 +161,11 @@ Home is now a dense project-library workspace inspired by Unreal/Unity hubs: nar
 - Long conversions run as foreground data-sync work with a low-priority notification.
 - Queue UI observes database state and supports cancellation, persistent history, retries-ready state data, and restart-safe progress.
 - Completed/partial/failed jobs are stored both in Room and lightweight JSON history files.
+
+## Queue drain and notifications — 0.18.2
+
+- Replaced one-WorkRequest-per-file chaining with one durable queue-drain Worker that repeatedly claims the smallest WAITING/RUNNING Room job.
+- App and Import/Export startup both ensure the unique drain worker is scheduled, recovering jobs left waiting by a previous process.
+- Foreground notification now updates current filename, conversion phase, and progress.
+- Per-file success notifications and an all-imports-complete notification use a monochrome Luxe status icon plus app-logo large icon.
+- Low-memory devices pause 1.5 seconds between files after releasing native scenes; other devices pause briefly.
