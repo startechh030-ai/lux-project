@@ -177,3 +177,11 @@ Home is now a dense project-library workspace inspired by Unreal/Unity hubs: nar
 - Invalid transactions are deleted and never appear in My Assets.
 - Valid transactions receive rich validation metadata and are atomically renamed into final asset folders.
 - Startup recovery removes orphaned transactions left by process death.
+
+## Phase 2B glTF textures — 0.20.0
+
+- Extracts base64 glTF image data URIs into bounded texture files.
+- Collects external package textures, repairs image URIs into `textures/`, normalizes separators/encoding, deduplicates identical images by SHA-256, and resolves filename collisions.
+- Validates PNG/JPEG/WEBP/BMP decodability while preserving TGA/DDS with compatibility warnings.
+- Deletes duplicate loose images only after all glTF image URIs are rewritten.
+- Asset metadata records texture file paths and combined texture/structural warnings before transactional finalization.
