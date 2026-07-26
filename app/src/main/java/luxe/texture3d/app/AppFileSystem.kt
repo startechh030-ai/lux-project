@@ -24,5 +24,8 @@ class AppFileSystem(context: Context) {
         staging.listFiles()?.forEach { entry ->
             if (entry.isDirectory) entry.deleteRecursively() else entry.delete()
         }
+        // Transactions are hidden from the Asset Library and are safe to
+        // remove after process death because only validated assets are renamed.
+        assets.listFiles()?.filter { it.name.startsWith(".converting-") }?.forEach { it.deleteRecursively() }
     }
 }

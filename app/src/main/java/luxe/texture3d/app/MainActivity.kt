@@ -102,7 +102,7 @@ class MainActivity : AppCompatActivity() {
         else dirs.forEach{projectStrip.addView(workstationProjectCard(it),LinearLayout.LayoutParams(dp(190),dp(172)).apply{rightMargin=dp(10)})}
         root.addView(HorizontalScrollView(this).apply{isHorizontalScrollBarEnabled=false;addView(projectStrip)},LinearLayout.LayoutParams(-1,dp(178)))
 
-        val assetDirs=appFiles.assets.listFiles()?.filter{it.isDirectory}?.sortedByDescending{it.lastModified()}?:emptyList()
+        val assetDirs=appFiles.assets.listFiles()?.filter{it.isDirectory&&!it.name.startsWith(".converting-")&&java.io.File(it,"asset.json").isFile}?.sortedByDescending{it.lastModified()}?:emptyList()
         root.addView(libraryHeading("MY ASSETS"){startActivity(Intent(this,AssetLibraryActivity::class.java))},LinearLayout.LayoutParams(-1,dp(36)))
         val assetStrip=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL}
         if(assetDirs.isEmpty())assetStrip.addView(label("Converted models appear here.",12f,0xff777777.toInt()).apply{gravity=Gravity.CENTER},LinearLayout.LayoutParams(dp(320),dp(135)))

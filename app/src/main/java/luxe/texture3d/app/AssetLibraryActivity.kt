@@ -14,7 +14,7 @@ class AssetLibraryActivity:AppCompatActivity(){
         val root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(14),dp(10),dp(14),dp(10));setBackgroundColor(0xff121212.toInt())}
         val top=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
         top.addView(button("‹  Back"){finish()},LinearLayout.LayoutParams(dp(90),dp(38)));top.addView(TextView(this).apply{text="MY ASSETS";textSize=17f;setTextColor(0xffeeeeee.toInt());setTypeface(typeface,1);gravity=Gravity.CENTER_VERTICAL;setPadding(dp(14),0,0,0)},LinearLayout.LayoutParams(0,dp(42),1f));root.addView(top)
-        val dirs=files.assets.listFiles()?.filter{it.isDirectory}?.sortedByDescending{it.lastModified()}?:emptyList();val grid=GridLayout(this).apply{columnCount=5;setPadding(0,dp(10),0,0)}
+        val dirs=files.assets.listFiles()?.filter{it.isDirectory&&!it.name.startsWith(".converting-")&&File(it,"asset.json").isFile}?.sortedByDescending{it.lastModified()}?:emptyList();val grid=GridLayout(this).apply{columnCount=5;setPadding(0,dp(10),0,0)}
         dirs.forEach{dir->grid.addView(card(dir),GridLayout.LayoutParams().apply{width=dp(190);height=dp(180);setMargins(0,0,dp(10),dp(10))})}
         if(dirs.isEmpty())grid.addView(TextView(this).apply{text="No converted assets yet";textSize=14f;setTextColor(0xff777777.toInt());gravity=Gravity.CENTER},GridLayout.LayoutParams().apply{width=dp(500);height=dp(120)})
         root.addView(ScrollView(this).apply{addView(grid)},LinearLayout.LayoutParams(-1,0,1f));return root

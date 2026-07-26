@@ -169,3 +169,11 @@ Home is now a dense project-library workspace inspired by Unreal/Unity hubs: nar
 - Foreground notification now updates current filename, conversion phase, and progress.
 - Per-file success notifications and an all-imports-complete notification use a monochrome Luxe status icon plus app-logo large icon.
 - Low-memory devices pause 1.5 seconds between files after releasing native scenes; other devices pause briefly.
+
+## Phase 2A transactional glTF validation — 0.19.0
+
+- Assimp writes into hidden `.converting-*` transaction folders rather than final assets.
+- A structural validator checks glTF 2.0 JSON, meshes, scenes/nodes, buffers, bufferViews, accessors, images, external file sizes, URI schemes, absolute paths, backslashes, and path traversal.
+- Invalid transactions are deleted and never appear in My Assets.
+- Valid transactions receive rich validation metadata and are atomically renamed into final asset folders.
+- Startup recovery removes orphaned transactions left by process death.

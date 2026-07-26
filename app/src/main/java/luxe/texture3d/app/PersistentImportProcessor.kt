@@ -28,15 +28,23 @@ class PersistentImportProcessor(private val context:Context){
             }else listOf(source)
             if(candidates.isEmpty())error("No supported model found")
             candidates.forEachIndexed{index,candidate->
-                progress(20+(index*65/candidates.size),"Converting ${index+1}/${candidates.size}: ${candidate.name}")
-                val output=File(files.assets,"${safe(candidate.nameWithoutExtension)}-${System.currentTimeMillis()}-$index");output.mkdirs()
+                progress(20+(index*60/candidates.size),"Converting ${index+1}/${candidates.size}: ${candidate.name}")
+                val assetId="${safe(candidate.nameWithoutExtension)}-${System.currentTimeMillis()}-$index"
+                val transaction=File(files.assets,".converting-$assetId");val finalOutput=File(files.assets,assetId)
+                transaction.deleteRecursively();transaction.mkdirs()
                 runCatching{
-                    copyResources(candidate.parentFile?:stage,output)
-                    val nativeError=bridge.nativeConvertToGltf(candidate.absolutePath,output.absolutePath);if(nativeError.isNotEmpty())error(nativeError)
-                    createThumbnail(candidate.parentFile?:stage,File(output,"thumbnail.png"))
-                    File(output,"asset.json").writeText(JSONObject().put("id",output.name).put("displayName",candidate.name).put("sourceFormat",candidate.extension.lowercase()).put("model","model.gltf").put("thumbnail","thumbnail.png").put("status","ready").toString())
-                    created+=output.name
-                }.onFailure{output.deleteRecursively();errors+="${candidate.name}: ${it.message}"}
+                    copyResources(candidate.parentFile?:stage,transaction)
+                    val nativeError=bridge.nativeConvertToGltf(candidate.absolutePath,transaction.absolutePath);if(nativeError.isNotEmpty())error(nativeError)
+                    progress(82+(index*8/candidates.size),"Validating ${candidate.name}")
+                    val report=GltfValidator.validate(transaction)
+                    if(!report.valid)error("glTF validation failed: ${report.errors.joinToString("; ")}")
+                    createThumbnail(candidate.parentFile?:stage,File(transaction,"thumbnail.png"))
+                    val metadata=JSONObject().put("id",assetId).put("displayName",candidate.name).put("sourceFormat",candidate.extension.lowercase()).put("outputFormat","gltf2").put("model","model.gltf").put("thumbnail","thumbnail.png").put("status",if(report.warnings.isEmpty())"ready" else "ready_with_warnings").put("meshCount",report.meshCount).put("nodeCount",report.nodeCount).put("materialCount",report.materialCount).put("textureCount",report.textureCount).put("animationCount",report.animationCount).put("warnings",JSONArray(report.warnings)).put("createdAt",System.currentTimeMillis())
+                    File(transaction,"asset.json").writeText(metadata.toString())
+                    check(!finalOutput.exists()){ "Asset destination already exists" }
+                    check(transaction.renameTo(finalOutput)){ "Unable to finalize converted asset" }
+                    created+=assetId
+                }.onFailure{transaction.deleteRecursively();finalOutput.takeIf{it.exists()&&!File(it,"asset.json").exists()}?.deleteRecursively();errors+="${candidate.name}: ${it.message}"}
             }
             if(created.isEmpty())return Result("FAILED",emptyList(),errors.joinToString(" | ").ifBlank{"Conversion failed"})
             return Result(if(errors.isEmpty())"COMPLETED" else "PARTIAL",created,errors.joinToString(" | "))
