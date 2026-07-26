@@ -185,3 +185,11 @@ Home is now a dense project-library workspace inspired by Unreal/Unity hubs: nar
 - Validates PNG/JPEG/WEBP/BMP decodability while preserving TGA/DDS with compatibility warnings.
 - Deletes duplicate loose images only after all glTF image URIs are rewritten.
 - Asset metadata records texture file paths and combined texture/structural warnings before transactional finalization.
+
+## Phase 2C metadata and duplicate detection — 0.21.0
+
+- Extracts vertex/triangle counts, local accessor bounds, node/mesh/material/texture/animation counts, and textured-material counts from validated glTF.
+- Records SHA-256 source and converted-content fingerprints plus a per-file size/hash inventory in `asset.json`.
+- Detects existing identical converted content and reuses the existing asset instead of writing a duplicate folder.
+- Adds `DUPLICATE` history state and a dedicated reuse notification.
+- Hub asset cards show triangle and texture counts from metadata.

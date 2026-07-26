@@ -42,7 +42,7 @@ interface ImportJobDao {
     @Query("UPDATE import_jobs SET state=:state, progress=:progress, message=:message, error=:error, outputAssetIdsJson=:assets, updatedAt=:now WHERE id=:id")
     suspend fun update(id:String,state:String,progress:Int,message:String,error:String="",assets:String="[]",now:Long=System.currentTimeMillis())
 
-    @Query("DELETE FROM import_jobs WHERE state IN ('COMPLETED','PARTIAL','FAILED','CANCELLED')")
+    @Query("DELETE FROM import_jobs WHERE state IN ('COMPLETED','PARTIAL','DUPLICATE','FAILED','CANCELLED')")
     suspend fun clearFinished()
 }
 

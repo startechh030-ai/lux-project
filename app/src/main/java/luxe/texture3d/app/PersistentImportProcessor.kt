@@ -17,7 +17,7 @@ class PersistentImportProcessor(private val context:Context){
     private val resources=setOf("png","jpg","jpeg","tga","bmp","webp","dds","mtl","bin")
 
     fun run(job:ImportJob,progress:(Int,String)->Unit):Result{
-        val stage=File(files.staging,job.id);val created=mutableListOf<String>();val errors=mutableListOf<String>()
+        val stage=File(files.staging,job.id);val created=mutableListOf<String>();val errors=mutableListOf<String>();var newAssets=0;var duplicates=0
         try{
             stage.deleteRecursively();stage.mkdirs();progress(5,"Staging source")
             val source=File(stage,job.displayName);copyUri(Uri.parse(job.sourceUri),source)
@@ -40,17 +40,24 @@ class PersistentImportProcessor(private val context:Context){
                     progress(86+(index*6/candidates.size),"Validating ${candidate.name}")
                     val report=GltfValidator.validate(transaction)
                     if(!report.valid)error("glTF validation failed: ${report.errors.joinToString("; ")}")
+                    val details=GltfMetadataExtractor.extract(transaction)
+                    val contentHash=AssetFingerprint.contentHash(transaction)
+                    val duplicate=AssetFingerprint.findDuplicate(files.assets,contentHash)
+                    if(duplicate!=null){transaction.deleteRecursively();created+=duplicate.name;duplicates++;return@runCatching}
                     createThumbnail(candidate.parentFile?:stage,File(transaction,"thumbnail.png"))
-                    val allWarnings=(textureReport.warnings+report.warnings).distinct()
-                    val metadata=JSONObject().put("id",assetId).put("displayName",candidate.name).put("sourceFormat",candidate.extension.lowercase()).put("outputFormat","gltf2").put("model","model.gltf").put("thumbnail","thumbnail.png").put("status",if(allWarnings.isEmpty())"ready" else "ready_with_warnings").put("meshCount",report.meshCount).put("nodeCount",report.nodeCount).put("materialCount",report.materialCount).put("textureCount",textureReport.textureFiles).put("textureFiles",JSONArray(textureReport.files)).put("animationCount",report.animationCount).put("warnings",JSONArray(allWarnings)).put("createdAt",System.currentTimeMillis())
+                    val allWarnings=(textureReport.warnings+report.warnings+details.warnings).distinct()
+                    val inventory=JSONArray();AssetFingerprint.inventory(transaction).forEach{inventory.put(JSONObject().put("path",it.path).put("size",it.size).put("sha256",it.sha256))}
+                    val bounds=if(details.boundsMin!=null&&details.boundsMax!=null)JSONObject().put("min",GltfMetadataExtractor.vectorJson(details.boundsMin)).put("max",GltfMetadataExtractor.vectorJson(details.boundsMax)) else JSONObject.NULL
+                    val metadata=JSONObject().put("id",assetId).put("displayName",candidate.name).put("sourceFormat",candidate.extension.lowercase()).put("sourceHash",AssetFingerprint.fileHash(candidate)).put("contentHash",contentHash).put("outputFormat","gltf2").put("model","model.gltf").put("thumbnail","thumbnail.png").put("status",if(allWarnings.isEmpty())"ready" else "ready_with_warnings").put("meshCount",details.meshCount).put("nodeCount",details.nodeCount).put("materialCount",details.materialCount).put("texturedMaterialCount",details.texturedMaterialCount).put("textureCount",textureReport.textureFiles).put("textureFiles",JSONArray(textureReport.files)).put("animationCount",details.animationCount).put("vertexCount",details.vertexCount).put("triangleCount",details.triangleCount).put("bounds",bounds).put("files",inventory).put("warnings",JSONArray(allWarnings)).put("createdAt",System.currentTimeMillis())
                     File(transaction,"asset.json").writeText(metadata.toString())
                     check(!finalOutput.exists()){ "Asset destination already exists" }
                     check(transaction.renameTo(finalOutput)){ "Unable to finalize converted asset" }
-                    created+=assetId
+                    created+=assetId;newAssets++
                 }.onFailure{transaction.deleteRecursively();finalOutput.takeIf{it.exists()&&!File(it,"asset.json").exists()}?.deleteRecursively();errors+="${candidate.name}: ${it.message}"}
             }
             if(created.isEmpty())return Result("FAILED",emptyList(),errors.joinToString(" | ").ifBlank{"Conversion failed"})
-            return Result(if(errors.isEmpty())"COMPLETED" else "PARTIAL",created,errors.joinToString(" | "))
+            val state=when{errors.isNotEmpty()->"PARTIAL";newAssets==0&&duplicates>0->"DUPLICATE";else->"COMPLETED"}
+            return Result(state,created,errors.joinToString(" | "))
         }catch(t:Throwable){return Result("FAILED",created,t.message?:"Import failed")}
         finally{stage.deleteRecursively();runCatching{bridge.nativeCancel()}}
     }

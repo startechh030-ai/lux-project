@@ -117,10 +117,11 @@ class MainActivity : AppCompatActivity() {
     private fun libraryHeading(title:String,viewAll:()->Unit)=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;addView(label(title,13f,0xffdddddd.toInt()).apply{setTypeface(typeface,1)},LinearLayout.LayoutParams(0,-1,1f));addView(label("View All  ›",10f,0xff799bc2.toInt()).apply{gravity=Gravity.CENTER;setOnClickListener{viewAll()}},LinearLayout.LayoutParams(dp(78),-1))}
 
     private fun assetCard(dir:java.io.File):View=LinearLayout(this).apply{
+        val meta=runCatching{org.json.JSONObject(java.io.File(dir,"asset.json").readText())}.getOrNull()
         orientation=LinearLayout.VERTICAL;setPadding(dp(7),dp(7),dp(7),dp(7));setBackgroundResource(R.drawable.hub_card_bg);setOnClickListener{startActivity(Intent(this@MainActivity,AssetLibraryActivity::class.java).putExtra(AssetLibraryActivity.EXTRA_ASSET_PATH,dir.absolutePath))}
         addView(ImageView(this@MainActivity).apply{val bitmap=loadThumbnailBitmap(java.io.File(dir,"thumbnail.png"));if(bitmap!=null){setImageBitmap(bitmap);scaleType=ImageView.ScaleType.CENTER_CROP}else{setImageResource(R.drawable.luxe_launcher);scaleType=ImageView.ScaleType.CENTER_INSIDE;setPadding(dp(20),dp(12),dp(20),dp(12))}},LinearLayout.LayoutParams(-1,0,1f))
         addView(label(dir.name.substringBeforeLast('-'),11f,0xffdedede.toInt()).apply{setTypeface(typeface,1)},LinearLayout.LayoutParams(-1,dp(24)))
-        addView(label("glTF asset  •  ${formatBytes((java.io.File(dir,"model.gltf").length()+java.io.File(dir,"model.bin").length()))}",9f,0xff777777.toInt()),LinearLayout.LayoutParams(-1,dp(20)))
+        addView(label("${meta?.optLong("triangleCount",0)?:0} tris  •  ${meta?.optInt("textureCount",0)?:0} tex  •  ${formatBytes((java.io.File(dir,"model.gltf").length()+java.io.File(dir,"model.bin").length()))}",9f,0xff777777.toInt()),LinearLayout.LayoutParams(-1,dp(20)))
     }
 
     private fun workstationProjectCard(dir:DocumentFile):View{

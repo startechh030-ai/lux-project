@@ -37,7 +37,7 @@ class AssimpImportWorker(context:Context,params:WorkerParameters):CoroutineWorke
                 val assets=JSONArray(result.assets).toString()
                 dao.update(job.id,result.state,100,if(result.state=="FAILED")"Failed" else "Completed",result.error,assets)
                 writeHistory(job,result)
-                if(result.state!="FAILED"){completed++;notifyFileComplete(job.displayName,result.assets.size)}
+                if(result.state!="FAILED"){completed++;if(result.state=="DUPLICATE")notifyDuplicate(job.displayName)else notifyFileComplete(job.displayName,result.assets.size)}
             }catch(t:Throwable){
                 dao.update(job.id,"FAILED",100,"Failed",t.message?:"Worker failure")
                 writeHistory(job,PersistentImportProcessor.Result("FAILED",emptyList(),t.message?:"Worker failure"))
@@ -60,6 +60,7 @@ class AssimpImportWorker(context:Context,params:WorkerParameters):CoroutineWorke
     private fun baseBuilder()=NotificationCompat.Builder(applicationContext,CHANNEL).setSmallIcon(R.drawable.ic_notification).setLargeIcon(largeIcon).setContentIntent(contentIntent()).setOnlyAlertOnce(true)
     private fun foreground(name:String,progress:Int,message:String)=ForegroundInfo(FOREGROUND_ID,baseBuilder().setContentTitle("Importing $name").setContentText(message).setOngoing(true).setProgress(100,progress,progress<=1).build(),android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
     private fun notifyFileComplete(name:String,assets:Int){notifications.notify(name.hashCode(),baseBuilder().setContentTitle("✓ Your file has been imported successfully").setContentText("$name • $assets asset(s) ready").setOngoing(false).setProgress(0,0,false).setAutoCancel(true).build())}
+    private fun notifyDuplicate(name:String){notifications.notify(name.hashCode(),baseBuilder().setContentTitle("Asset already exists").setContentText("$name reused the existing converted asset").setOngoing(false).setProgress(0,0,false).setAutoCancel(true).build())}
     private fun notifyQueueComplete(count:Int){notifications.notify(COMPLETE_ID,baseBuilder().setContentTitle("✓ All imports completed").setContentText("$count file(s) imported successfully").setOngoing(false).setProgress(0,0,false).setAutoCancel(true).build())}
 
     companion object{const val UNIQUE_QUEUE="luxe-assimp-imports";private const val CHANNEL="luxe_imports";private const val FOREGROUND_ID=5101;private const val COMPLETE_ID=5102}
