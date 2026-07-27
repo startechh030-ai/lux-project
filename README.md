@@ -193,3 +193,10 @@ Home is now a dense project-library workspace inspired by Unreal/Unity hubs: nar
 - Detects existing identical converted content and reuses the existing asset instead of writing a duplicate folder.
 - Adds `DUPLICATE` history state and a dedicated reuse notification.
 - Hub asset cards show triangle and texture counts from metadata.
+
+## Asset metadata backfill — 0.21.1
+
+- Startup asynchronously upgrades pre-2C `asset.json` files without reconverting models.
+- Backfill calculates geometry/material/animation counts, texture inventory, bounds, content fingerprint, and file hashes, then replaces metadata atomically.
+- Hub cards show mesh fallback text while migration runs instead of misleading `0 tris`.
+- Asset-facing UI uses metadata display names and never exposes `model.gltf` or runtime folder IDs as product labels.

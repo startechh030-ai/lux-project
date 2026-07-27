@@ -43,7 +43,7 @@ class MainActivity : AppCompatActivity() {
 
 
 
-    override fun onCreate(savedInstanceState:Bundle?){super.onCreate(savedInstanceState);appFiles.recoverStaging();ImportQueueScheduler.ensureRunning(this);WindowCompat.setDecorFitsSystemWindows(window,false);window.statusBarColor=Color.TRANSPARENT;window.navigationBarColor=Color.TRANSPARENT;window.setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,WindowManager.LayoutParams.FLAG_FULLSCREEN);setContentView(buildShell());applyImmersiveMode();showHome()}
+    override fun onCreate(savedInstanceState:Bundle?){super.onCreate(savedInstanceState);appFiles.recoverStaging();ImportQueueScheduler.ensureRunning(this);WindowCompat.setDecorFitsSystemWindows(window,false);window.statusBarColor=Color.TRANSPARENT;window.navigationBarColor=Color.TRANSPARENT;window.setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,WindowManager.LayoutParams.FLAG_FULLSCREEN);setContentView(buildShell());applyImmersiveMode();showHome();AssetMetadataMigrator.migrateAsync(this){runOnUiThread{if(activePage==0)showHome()}}}
     override fun onResume(){super.onResume();applyImmersiveMode();if(::content.isInitialized){if(activePage==0)showHome() else if(activePage==1)showProjects()}}
     override fun onWindowFocusChanged(hasFocus:Boolean){super.onWindowFocusChanged(hasFocus);if(hasFocus)applyImmersiveMode()}
 
@@ -118,10 +118,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun assetCard(dir:java.io.File):View=LinearLayout(this).apply{
         val meta=runCatching{org.json.JSONObject(java.io.File(dir,"asset.json").readText())}.getOrNull()
+        val geometryText=if(meta?.has("triangleCount")==true)"${meta.optLong("triangleCount")} tris" else "${meta?.optInt("meshCount",0)?:0} meshes"
+        val textureText=if(meta?.has("textureCount")==true)"${meta.optInt("textureCount")} tex" else "textures pending"
         orientation=LinearLayout.VERTICAL;setPadding(dp(7),dp(7),dp(7),dp(7));setBackgroundResource(R.drawable.hub_card_bg);setOnClickListener{startActivity(Intent(this@MainActivity,AssetLibraryActivity::class.java).putExtra(AssetLibraryActivity.EXTRA_ASSET_PATH,dir.absolutePath))}
         addView(ImageView(this@MainActivity).apply{val bitmap=loadThumbnailBitmap(java.io.File(dir,"thumbnail.png"));if(bitmap!=null){setImageBitmap(bitmap);scaleType=ImageView.ScaleType.CENTER_CROP}else{setImageResource(R.drawable.luxe_launcher);scaleType=ImageView.ScaleType.CENTER_INSIDE;setPadding(dp(20),dp(12),dp(20),dp(12))}},LinearLayout.LayoutParams(-1,0,1f))
-        addView(label(dir.name.substringBeforeLast('-'),11f,0xffdedede.toInt()).apply{setTypeface(typeface,1)},LinearLayout.LayoutParams(-1,dp(24)))
-        addView(label("${meta?.optLong("triangleCount",0)?:0} tris  •  ${meta?.optInt("textureCount",0)?:0} tex  •  ${formatBytes((java.io.File(dir,"model.gltf").length()+java.io.File(dir,"model.bin").length()))}",9f,0xff777777.toInt()),LinearLayout.LayoutParams(-1,dp(20)))
+        addView(label(meta?.optString("displayName")?.substringBeforeLast('.')?.takeIf{it.isNotBlank()}?:"Imported Asset",11f,0xffdedede.toInt()).apply{setTypeface(typeface,1)},LinearLayout.LayoutParams(-1,dp(24)))
+        addView(label("$geometryText  •  $textureText  •  ${formatBytes((java.io.File(dir,"model.gltf").length()+java.io.File(dir,"model.bin").length()))}",9f,0xff777777.toInt()),LinearLayout.LayoutParams(-1,dp(20)))
     }
 
     private fun workstationProjectCard(dir:DocumentFile):View{
