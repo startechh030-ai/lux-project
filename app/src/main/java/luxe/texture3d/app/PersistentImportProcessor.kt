@@ -35,6 +35,9 @@ class PersistentImportProcessor(private val context:Context){
                 runCatching{
                     copyResources(candidate.parentFile?:stage,transaction)
                     val nativeError=bridge.nativeConvertToGltf(candidate.absolutePath,transaction.absolutePath);if(nativeError.isNotEmpty())error(nativeError)
+                    val nativeMetadataFile=File(transaction,"conversion_native.json")
+                    val nativeMetadata=runCatching{JSONObject(nativeMetadataFile.readText())}.getOrElse{JSONObject()}
+                    nativeMetadataFile.delete()
                     progress(78+(index*7/candidates.size),"Collecting textures for ${candidate.name}")
                     val textureReport=GltfTexturePipeline.process(transaction,stage)
                     progress(86+(index*6/candidates.size),"Validating ${candidate.name}")
@@ -45,10 +48,11 @@ class PersistentImportProcessor(private val context:Context){
                     val duplicate=AssetFingerprint.findDuplicate(files.assets,contentHash)
                     if(duplicate!=null){transaction.deleteRecursively();created+=duplicate.name;duplicates++;return@runCatching}
                     createThumbnail(candidate.parentFile?:stage,File(transaction,"thumbnail.png"))
-                    val allWarnings=(textureReport.warnings+report.warnings+details.warnings).distinct()
+                    val nativeWarnings=nativeMetadata.optJSONArray("warnings")?.let{array->List(array.length()){array.optString(it)}}?:emptyList()
+                    val allWarnings=(textureReport.warnings+report.warnings+details.warnings+nativeWarnings).distinct()
                     val inventory=JSONArray();AssetFingerprint.inventory(transaction).forEach{inventory.put(JSONObject().put("path",it.path).put("size",it.size).put("sha256",it.sha256))}
                     val bounds=if(details.boundsMin!=null&&details.boundsMax!=null)JSONObject().put("min",GltfMetadataExtractor.vectorJson(details.boundsMin)).put("max",GltfMetadataExtractor.vectorJson(details.boundsMax)) else JSONObject.NULL
-                    val metadata=JSONObject().put("id",assetId).put("displayName",candidate.name).put("sourceFormat",candidate.extension.lowercase()).put("sourceHash",AssetFingerprint.fileHash(candidate)).put("contentHash",contentHash).put("outputFormat","gltf2").put("model","model.gltf").put("thumbnail","thumbnail.png").put("status",if(allWarnings.isEmpty())"ready" else "ready_with_warnings").put("meshCount",details.meshCount).put("nodeCount",details.nodeCount).put("materialCount",details.materialCount).put("texturedMaterialCount",details.texturedMaterialCount).put("textureCount",textureReport.textureFiles).put("textureFiles",JSONArray(textureReport.files)).put("animationCount",details.animationCount).put("vertexCount",details.vertexCount).put("triangleCount",details.triangleCount).put("bounds",bounds).put("files",inventory).put("warnings",JSONArray(allWarnings)).put("createdAt",System.currentTimeMillis())
+                    val metadata=JSONObject().put("id",assetId).put("displayName",candidate.name).put("sourceFormat",candidate.extension.lowercase()).put("conversionProfile",nativeMetadata.optString("profile","preserve")).put("sourceUpAxis",nativeMetadata.optString("sourceUpAxis","unknown")).put("sourceUnitScale",nativeMetadata.optDouble("unitScaleFactor",1.0)).put("convertedUpAxis","source-preserved").put("convertedUnits","source-preserved").put("hasBones",nativeMetadata.optBoolean("hasBones",false)).put("assetKind",if(nativeMetadata.optBoolean("hasBones",false)||details.animationCount>0)"animated" else "static").put("cameraCount",nativeMetadata.optInt("cameraCount",0)).put("lightCount",nativeMetadata.optInt("lightCount",0)).put("sourceHash",AssetFingerprint.fileHash(candidate)).put("contentHash",contentHash).put("outputFormat","gltf2").put("model","model.gltf").put("thumbnail","thumbnail.png").put("status",if(allWarnings.isEmpty())"ready" else "ready_with_warnings").put("meshCount",details.meshCount).put("nodeCount",details.nodeCount).put("materialCount",details.materialCount).put("texturedMaterialCount",details.texturedMaterialCount).put("textureCount",textureReport.textureFiles).put("textureFiles",JSONArray(textureReport.files)).put("animationCount",details.animationCount).put("vertexCount",details.vertexCount).put("triangleCount",details.triangleCount).put("bounds",bounds).put("files",inventory).put("warnings",JSONArray(allWarnings)).put("createdAt",System.currentTimeMillis())
                     File(transaction,"asset.json").writeText(metadata.toString())
                     check(!finalOutput.exists()){ "Asset destination already exists" }
                     check(transaction.renameTo(finalOutput)){ "Unable to finalize converted asset" }

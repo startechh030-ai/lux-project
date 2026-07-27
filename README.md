@@ -200,3 +200,11 @@ Home is now a dense project-library workspace inspired by Unreal/Unity hubs: nar
 - Backfill calculates geometry/material/animation counts, texture inventory, bounds, content fingerprint, and file hashes, then replaces metadata atomically.
 - Hub cards show mesh fallback text while migration runs instead of misleading `0 tris`.
 - Asset-facing UI uses metadata display names and never exposes `model.gltf` or runtime folder IDs as product labels.
+
+## Phase 2D format profiles — 0.22.0
+
+- Assimp flags now vary by source: preserve-glTF, preserve-scene (FBX/DAE/BLEND), surface mesh (OBJ), and static geometry profiles.
+- Existing glTF/GLB avoids normal/tangent regeneration and export post-processing where possible.
+- Native conversion metadata records profile, source axis/unit hints, animations, cameras, lights, materials, and bone presence.
+- Asset metadata records preserved-unit policy, static/animated kind, native warnings, and material quality warnings.
+- Older assets receive inferred profile metadata through schema-version-3 backfill.

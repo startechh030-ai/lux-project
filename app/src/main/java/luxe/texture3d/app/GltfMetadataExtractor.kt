@@ -25,8 +25,15 @@ object GltfMetadataExtractor {
             }
         }
         val materials=json.optJSONArray("materials")?:JSONArray();var textured=0
-        for(i in 0 until materials.length()){val m=materials.optJSONObject(i)?:continue;val pbr=m.optJSONObject("pbrMetallicRoughness");if(pbr?.has("baseColorTexture")==true||pbr?.has("metallicRoughnessTexture")==true||m.has("normalTexture")||m.has("occlusionTexture")||m.has("emissiveTexture"))textured++}
-        return Metadata(meshes.length(),json.optJSONArray("nodes")?.length()?:0,materials.length(),json.optJSONArray("textures")?.length()?:0,json.optJSONArray("animations")?.length()?:0,vertices,triangles,textured,min,max,warnings.distinct())
+        if(materials.length()==0)warnings+="Converted asset contains no materials"
+        for(i in 0 until materials.length()){
+            val m=materials.optJSONObject(i)?:continue;val pbr=m.optJSONObject("pbrMetallicRoughness")
+            if(pbr?.has("baseColorTexture")==true||pbr?.has("metallicRoughnessTexture")==true||m.has("normalTexture")||m.has("occlusionTexture")||m.has("emissiveTexture"))textured++
+            if(m.optJSONObject("extensions")?.has("KHR_materials_pbrSpecularGlossiness")==true)warnings+="Material $i uses specular-glossiness workflow; conversion may be approximate"
+        }
+        val textureCount=json.optJSONArray("textures")?.length()?:0
+        if(textureCount>0&&textured==0)warnings+="Textures exist but no material texture slots were detected"
+        return Metadata(meshes.length(),json.optJSONArray("nodes")?.length()?:0,materials.length(),textureCount,json.optJSONArray("animations")?.length()?:0,vertices,triangles,textured,min,max,warnings.distinct())
     }
     private fun vector3(a:JSONArray?):FloatArray?=if(a!=null&&a.length()>=3)floatArrayOf(a.optDouble(0).toFloat(),a.optDouble(1).toFloat(),a.optDouble(2).toFloat())else null
     fun vectorJson(v:FloatArray?):JSONArray?=v?.let{JSONArray().put(it[0].toDouble()).put(it[1].toDouble()).put(it[2].toDouble())}
