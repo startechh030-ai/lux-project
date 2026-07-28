@@ -208,3 +208,12 @@ Home is now a dense project-library workspace inspired by Unreal/Unity hubs: nar
 - Native conversion metadata records profile, source axis/unit hints, animations, cameras, lights, materials, and bone presence.
 - Asset metadata records preserved-unit policy, static/animated kind, native warnings, and material quality warnings.
 - Older assets receive inferred profile metadata through schema-version-3 backfill.
+
+## Phase 3A Element Registry — 0.23.0
+
+- Added Room registries for Elements, immutable revisions, dependencies, blobs, blob references, ULX projects, and project Element references.
+- Added SHA-256 content-addressed blob storage with hard-link optimization and transactional copy fallback.
+- Existing converted model assets are registered as library-scoped Model Elements with `.ulelement` text manifests and immutable revision manifests without reconversion.
+- New conversions automatically register Model Elements after transactional glTF finalization.
+- Existing working projects receive stable project UIDs and registry records.
+- New projects create an unencrypted binary `.ulx` ZIP container containing a required text manifest and project payload.

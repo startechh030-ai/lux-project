@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import org.json.JSONArray
 import org.json.JSONObject
+import kotlinx.coroutines.runBlocking
 import java.io.*
 import java.util.UUID
 
@@ -56,6 +57,7 @@ class PersistentImportProcessor(private val context:Context){
                     File(transaction,"asset.json").writeText(metadata.toString())
                     check(!finalOutput.exists()){ "Asset destination already exists" }
                     check(transaction.renameTo(finalOutput)){ "Unable to finalize converted asset" }
+                    check(runBlocking{ElementRegistry(context).registerModelAsset(finalOutput)}!=null){"Unable to register Model Element"}
                     created+=assetId;newAssets++
                 }.onFailure{transaction.deleteRecursively();finalOutput.takeIf{it.exists()&&!File(it,"asset.json").exists()}?.deleteRecursively();errors+="${candidate.name}: ${it.message}"}
             }

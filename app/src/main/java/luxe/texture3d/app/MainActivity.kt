@@ -43,7 +43,7 @@ class MainActivity : AppCompatActivity() {
 
 
 
-    override fun onCreate(savedInstanceState:Bundle?){super.onCreate(savedInstanceState);appFiles.recoverStaging();ImportQueueScheduler.ensureRunning(this);WindowCompat.setDecorFitsSystemWindows(window,false);window.statusBarColor=Color.TRANSPARENT;window.navigationBarColor=Color.TRANSPARENT;window.setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,WindowManager.LayoutParams.FLAG_FULLSCREEN);setContentView(buildShell());applyImmersiveMode();showHome();AssetMetadataMigrator.migrateAsync(this){runOnUiThread{if(activePage==0)showHome()}}}
+    override fun onCreate(savedInstanceState:Bundle?){super.onCreate(savedInstanceState);appFiles.recoverStaging();ImportQueueScheduler.ensureRunning(this);WindowCompat.setDecorFitsSystemWindows(window,false);window.statusBarColor=Color.TRANSPARENT;window.navigationBarColor=Color.TRANSPARENT;window.setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,WindowManager.LayoutParams.FLAG_FULLSCREEN);setContentView(buildShell());applyImmersiveMode();showHome();AssetMetadataMigrator.migrateAsync(this){kotlinx.coroutines.runBlocking{ElementRegistry(this@MainActivity).migrateLegacyAssets();ProjectRegistry(this@MainActivity).migrateWorkingProjects()};runOnUiThread{if(activePage==0)showHome()}}}
     override fun onResume(){super.onResume();applyImmersiveMode();if(::content.isInitialized){if(activePage==0)showHome() else if(activePage==1)showProjects()}}
     override fun onWindowFocusChanged(hasFocus:Boolean){super.onWindowFocusChanged(hasFocus);if(hasFocus)applyImmersiveMode()}
 
@@ -163,8 +163,12 @@ class MainActivity : AppCompatActivity() {
         if(safe.isBlank()||folder.exists()){toast("Invalid or duplicate project name");return null}
         return runCatching{
             check(folder.mkdirs()){ "Could not create project folder" }
-            java.io.File(folder,"project.json").writeText("{\"name\":\"$safe\",\"template\":\"${t.title}\",\"version\":1,\"thumbnail\":\"thumbnail.png\",\"renderCamera\":null}")
+            val projectUid="project-${java.util.UUID.randomUUID()}"
+            java.io.File(folder,"project.json").writeText(org.json.JSONObject().put("uid",projectUid).put("name",safe).put("template",t.title).put("version",1).put("ulxFormat",1).put("thumbnail","thumbnail.png").put("renderCamera",org.json.JSONObject.NULL).toString())
             t.asset?.let{assetName->assets.open("templates/$assetName").use{input->java.io.FileOutputStream(java.io.File(folder,"model.glb")).use{input.copyTo(it)}}}
+            val packageFiles=linkedMapOf("project.json" to java.io.File(folder,"project.json"));java.io.File(folder,"model.glb").takeIf{it.isFile}?.let{packageFiles["model.glb"]=it}
+            UlxPackage.create(java.io.File(folder,"$safe.ulx"),projectUid,safe,packageFiles)
+            kotlinx.coroutines.runBlocking{ProjectRegistry(this@MainActivity).migrateWorkingProjects()}
             DocumentFile.fromFile(folder)
         }.onFailure{folder.deleteRecursively();toast(it.message?:"Project creation failed")}.getOrNull()
     }

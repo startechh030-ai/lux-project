@@ -8,14 +8,18 @@ class AppFileSystem(context: Context) {
     val root: File = requireNotNull(context.getExternalFilesDir(null)) { "External app storage unavailable" }
     val imports = File(root, "imports")
     val importHistory = File(imports, "history")
-    val assets = File(root, "assets")
+    val assets = File(root, "assets") // legacy model assets; migrated into Element registry
+    val library = File(root, "library")
+    val elements = File(library, "elements")
+    val blobs = File(library, "blobs/sha256")
+    val libraryTrash = File(library, "trash")
     val projects = File(root, "projects")
     val staging = File(root, "staging")
     val runtimeCache = File(context.externalCacheDir ?: context.cacheDir, "runtime")
     val thumbnails = File(root, "thumbnails")
 
     init {
-        listOf(imports, importHistory, assets, projects, staging, runtimeCache, thumbnails).forEach { dir ->
+        listOf(imports, importHistory, assets, library, elements, blobs, libraryTrash, projects, staging, runtimeCache, thumbnails).forEach { dir ->
             check(dir.exists() || dir.mkdirs()) { "Unable to create ${dir.absolutePath}" }
         }
     }
