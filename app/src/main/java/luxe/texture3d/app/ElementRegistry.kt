@@ -20,7 +20,12 @@ class ElementRegistry(private val context:Context){
 
     suspend fun registerModelAsset(assetDir:File):ElementEntity?=withContext(Dispatchers.IO){
         val metadataFile=File(assetDir,"asset.json");if(!metadataFile.isFile)return@withContext null
-        val metadata=JSONObject(metadataFile.readText());val existingUid=metadata.optString("elementUid");if(existingUid.isNotBlank())return@withContext db.elements().getElement(existingUid)
+        val metadata=JSONObject(metadataFile.readText());val existingUid=metadata.optString("elementUid")
+        if(existingUid.isNotBlank()){
+            val existing=db.elements().getElement(existingUid)
+            if(existing!=null&&metadata.optInt("elementExtractionVersion",0)<1)runCatching{ModelElementExtractor(context).extract(assetDir,existing)}
+            return@withContext existing
+        }
         val name=metadata.optString("displayName",assetDir.name).substringBeforeLast('.').ifBlank{"Imported Model"};val elementUid="el-${UUID.randomUUID()}";val revisionUid="rev-${UUID.randomUUID()}";val now=System.currentTimeMillis();val contentHash=metadata.optString("contentHash").ifBlank{AssetFingerprint.contentHash(assetDir)}
         val refs=mutableListOf<ElementBlobRefEntity>();val blobRows=mutableListOf<BlobStore.Stored>()
         assetDir.walkTopDown().filter{it.isFile&&it.name!="asset.json"}.forEach{file->val stored=blobs.put(file);blobRows+=stored;refs+=ElementBlobRefEntity(revisionUid,stored.hash,file.relativeTo(assetDir).invariantSeparatorsPath,roleFor(file))}
@@ -34,6 +39,7 @@ class ElementRegistry(private val context:Context){
             db.elements().putElement(element);db.elements().putRevision(ElementRevisionEntity(revisionUid,elementUid,"1.0.0",revisionManifest.relativeTo(fs.library).invariantSeparatorsPath,contentHash,now));db.elements().putBlobRefs(refs)
         }
         metadata.put("elementUid",elementUid).put("revisionUid",revisionUid).put("elementSchemaVersion",1);val temp=File(assetDir,"asset.json.element.tmp");temp.writeText(metadata.toString());metadataFile.delete();check(temp.renameTo(metadataFile))
+        runCatching{ModelElementExtractor(context).extract(assetDir,element)}
         element
     }
 

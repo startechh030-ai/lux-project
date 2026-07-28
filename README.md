@@ -217,3 +217,12 @@ Home is now a dense project-library workspace inspired by Unreal/Unity hubs: nar
 - New conversions automatically register Model Elements after transactional glTF finalization.
 - Existing working projects receive stable project UIDs and registry records.
 - New projects create an unencrypted binary `.ulx` ZIP container containing a required text manifest and project payload.
+
+## Phase 3B.1 Texture and Material Elements — 0.24.0
+
+- Validated Model Elements automatically extract child Texture and Material Elements without duplicating geometry or image blobs.
+- Texture roles are derived from authoritative glTF material slots with filename hints as fallback.
+- Material Elements preserve glTF PBR payload and depend on Texture Elements plus read-only Luxe system shader Elements.
+- Model revision manifests and Room dependency rows expose the Model → Material → Texture family tree.
+- Image-only picker selections create standalone library Texture Elements instead of unsupported queue jobs; model+image selections still treat images as companion resources.
+- Supported standalone image Elements include PNG, JPEG, BMP, WEBP, TGA, DDS, SVG, GIF, HEIC/HEIF, and AVIF, with fallback thumbnails when Android cannot decode the source.

@@ -23,7 +23,16 @@ class PersistentImportProcessor(private val context:Context){
             stage.deleteRecursively();stage.mkdirs();progress(5,"Staging source")
             val source=File(stage,job.displayName);copyUri(Uri.parse(job.sourceUri),source)
             JSONArray(job.resourceUrisJson).let{array->for(i in 0 until array.length()){val uri=Uri.parse(array.getString(i));copyUri(uri,File(stage,displayName(uri)))}}
-            val candidates=if(job.sourceFormat=="zip"){
+            val imageExtensions=setOf("png","jpg","jpeg","tga","bmp","webp","dds","svg","gif","heic","heif","avif")
+            if(job.sourceFormat in imageExtensions){
+                progress(45,"Creating Texture Element")
+                val element=runBlocking{ModelElementExtractor(context).registerStandaloneTexture(source,job.displayName)}
+                val transaction=File(files.assets,".converting-${element.uid}").apply{deleteRecursively();mkdirs()};createThumbnail(stage,File(transaction,"thumbnail.png"))
+                File(transaction,"asset.json").writeText(JSONObject().put("id",element.uid).put("elementUid",element.uid).put("revisionUid",element.currentRevisionUid).put("displayName",job.displayName).put("sourceFormat",job.sourceFormat).put("status","ready").put("assetKind","texture").put("meshCount",0).put("triangleCount",0).put("textureCount",1).put("thumbnail","thumbnail.png").put("createdAt",System.currentTimeMillis()).toString())
+                val finalFolder=File(files.assets,element.uid);if(finalFolder.exists())transaction.deleteRecursively()else check(transaction.renameTo(finalFolder)){"Unable to finalize Texture Element projection"}
+                return Result("COMPLETED",listOf(element.uid))
+            }
+            val candidates=if(job.sourceFormat=="zip"){ 
                 progress(15,"Exploring nested ZIP package")
                 SafeZipExtractor.extractRecursive(source,File(stage,"unpacked")).files.filter{it.extension.lowercase() in supported}.distinctBy{it.canonicalPath}
             }else listOf(source)

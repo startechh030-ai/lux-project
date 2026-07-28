@@ -18,5 +18,5 @@ class BlobStore(context:Context){
         return Stored(hash,target,target.length(),mime)
     }
     private fun sha256(file:File):String{val digest=MessageDigest.getInstance("SHA-256");val buffer=ByteArray(256*1024);FileInputStream(file).use{input->while(true){val n=input.read(buffer);if(n<0)break;digest.update(buffer,0,n)}};return digest.digest().joinToString(""){"%02x".format(it)}}
-    companion object{fun mimeFor(file:File)=when(file.extension.lowercase()){"gltf"->"model/gltf+json";"bin"->"application/octet-stream";"png"->"image/png";"jpg","jpeg"->"image/jpeg";"webp"->"image/webp";"hdr"->"image/vnd.radiance";"mp4"->"video/mp4";"webm"->"video/webm";"svg"->"image/svg+xml";else->"application/octet-stream"}}
+    companion object{fun mimeFor(file:File)=when(file.extension.lowercase()){"gltf"->"model/gltf+json";"bin"->"application/octet-stream";"png"->"image/png";"jpg","jpeg"->"image/jpeg";"webp"->"image/webp";"gif"->"image/gif";"heic","heif"->"image/heic";"avif"->"image/avif";"hdr"->"image/vnd.radiance";"mp4"->"video/mp4";"webm"->"video/webm";"svg"->"image/svg+xml";else->"application/octet-stream"}}
 }
