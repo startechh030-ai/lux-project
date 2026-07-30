@@ -30,8 +30,9 @@ class ModelElementExtractor(private val context:Context){
             val material=materials.optJSONObject(i)?:continue;materialElements[i]=registerMaterial(model,modelRevision,i,material,textureIndexToElement)
         }
         val geometryElements=GeometryElementExtractor(context).extract(assetDir,model,modelRevision,materialElements)
-        updateModelRevisionManifest(model,modelRevision,materialElements.values.toList(),imageElements.values.toList(),geometryElements)
-        metadata.put("elementExtractionVersion",2).put("childTextureElements",JSONArray(imageElements.values.map{it.uid})).put("childMaterialElements",JSONArray(materialElements.values.map{it.uid})).put("childGeometryElements",JSONArray(geometryElements.map{it.uid}));val tmp=File(assetDir,"asset.json.extract.tmp");tmp.writeText(metadata.toString());File(assetDir,"asset.json").delete();check(tmp.renameTo(File(assetDir,"asset.json")))
+        val rigAnimation=RigAnimationElementExtractor(context).extract(assetDir,model,modelRevision)
+        updateModelRevisionManifest(model,modelRevision,materialElements.values.toList(),imageElements.values.toList(),geometryElements,rigAnimation.rigs,rigAnimation.animations)
+        metadata.put("elementExtractionVersion",3).put("childTextureElements",JSONArray(imageElements.values.map{it.uid})).put("childMaterialElements",JSONArray(materialElements.values.map{it.uid})).put("childGeometryElements",JSONArray(geometryElements.map{it.uid})).put("childRigElements",JSONArray(rigAnimation.rigs.map{it.uid})).put("childAnimationElements",JSONArray(rigAnimation.animations.map{it.uid}));val tmp=File(assetDir,"asset.json.extract.tmp");tmp.writeText(metadata.toString());File(assetDir,"asset.json").delete();check(tmp.renameTo(File(assetDir,"asset.json")))
     }
 
     suspend fun registerStandaloneTexture(file:File,displayName:String):ElementEntity{
@@ -59,13 +60,15 @@ class ModelElementExtractor(private val context:Context){
         return entity
     }
 
-    private suspend fun updateModelRevisionManifest(model:ElementEntity,revisionUid:String,materials:List<ElementEntity>,textures:List<ElementEntity>,geometries:List<ElementEntity>){
+    private suspend fun updateModelRevisionManifest(model:ElementEntity,revisionUid:String,materials:List<ElementEntity>,textures:List<ElementEntity>,geometries:List<ElementEntity>,rigs:List<ElementEntity>,animations:List<ElementEntity>){
         val revision=elements.revisions(model.uid).firstOrNull{it.uid==revisionUid}?:return;val file=File(fs.library,revision.manifestPath);if(!file.isFile)return
         val json=JSONObject(file.readText());val dependencies=JSONArray()
         materials.forEach{dependencies.put(JSONObject().put("element",it.uid).put("revision",it.currentRevisionUid).put("role","material").put("required",true))}
         textures.forEach{texture->dependencies.put(JSONObject().put("element",texture.uid).put("revision",texture.currentRevisionUid).put("role","texture_dependency").put("required",false))}
         geometries.forEach{geometry->dependencies.put(JSONObject().put("element",geometry.uid).put("revision",geometry.currentRevisionUid).put("role","geometry").put("required",true))}
-        json.put("dependencies",dependencies).put("extractionVersion",2);val temp=File(file.parentFile,"${file.name}.tmp");temp.writeText(json.toString(2));file.delete();check(temp.renameTo(file))
+        rigs.forEach{rig->dependencies.put(JSONObject().put("element",rig.uid).put("revision",rig.currentRevisionUid).put("role","rig").put("required",true))}
+        animations.forEach{animation->dependencies.put(JSONObject().put("element",animation.uid).put("revision",animation.currentRevisionUid).put("role","animation").put("required",false))}
+        json.put("dependencies",dependencies).put("extractionVersion",3);val temp=File(file.parentFile,"${file.name}.tmp");temp.writeText(json.toString(2));file.delete();check(temp.renameTo(file))
     }
 
     private suspend fun ensureSystemShaders(){listOf("system.shader.standard-pbr" to "Luxe Standard PBR","system.shader.unlit" to "Luxe Unlit","system.shader.transparent-pbr" to "Luxe Transparent PBR").forEach{(uid,name)->if(elements.getElement(uid)==null){val rev="$uid.r1";val now=System.currentTimeMillis();val dir=File(fs.elements,"$uid/revisions/$rev").apply{mkdirs()};val manifest=File(dir,"revision.ulelement");manifest.writeText(JSONObject().put("ulx","element_revision").put("format",1).put("uid",rev).put("element",uid).put("type","shader").put("version","1.0.0").put("system",true).put("backend","hidden").toString(2));File(fs.elements,"$uid/element.ulelement").apply{parentFile?.mkdirs();writeText(JSONObject().put("ulx","element").put("format",1).put("uid",uid).put("name",name).put("type","shader").put("scope","system").put("currentRevision",rev).toString(2))};elements.putElement(ElementEntity(uid,name,"shader","system",null,rev,null,"readonly",now,now));elements.putRevision(ElementRevisionEntity(rev,uid,"1.0.0",manifest.relativeTo(fs.library).invariantSeparatorsPath,sha256(name),now))}}}

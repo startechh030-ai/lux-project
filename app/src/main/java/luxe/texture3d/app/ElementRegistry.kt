@@ -23,7 +23,7 @@ class ElementRegistry(private val context:Context){
         val metadata=JSONObject(metadataFile.readText());val existingUid=metadata.optString("elementUid")
         if(existingUid.isNotBlank()){
             val existing=db.elements().getElement(existingUid)
-            if(existing!=null&&metadata.optInt("elementExtractionVersion",0)<2)runCatching{ModelElementExtractor(context).extract(assetDir,existing)}
+            if(existing!=null&&metadata.optInt("elementExtractionVersion",0)<3)runCatching{ModelElementExtractor(context).extract(assetDir,existing)}
             return@withContext existing
         }
         val name=metadata.optString("displayName",assetDir.name).substringBeforeLast('.').ifBlank{"Imported Model"};val elementUid="el-${UUID.randomUUID()}";val revisionUid="rev-${UUID.randomUUID()}";val now=System.currentTimeMillis();val contentHash=metadata.optString("contentHash").ifBlank{AssetFingerprint.contentHash(assetDir)}

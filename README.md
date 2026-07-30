@@ -233,3 +233,10 @@ Home is now a dense project-library workspace inspired by Unreal/Unity hubs: nar
 - Geometry manifests reference the source Model revision and record primitives, accessor indices, attribute layout, material assignments, morph targets, bounds, vertex/triangle counts, and topology signatures.
 - Geometry revisions depend on extracted Material Elements per primitive; Model revisions depend on Geometry Elements.
 - Existing Model Elements with extraction schema 1 are upgraded idempotently to schema 2 without Assimp reconversion.
+
+## Phase 3B.3 Rig and Animation Elements — 0.26.0
+
+- Creates dependency-scoped Rig Elements from glTF skins with joint hierarchy, parent mapping, skeleton root, inverse-bind accessor, and compatibility hash.
+- Creates one Animation Element per glTF animation with duration, channels, samplers, interpolation, target paths, rig compatibility, and root-motion candidate metadata.
+- Geometry Elements that are instantiated with a skin depend on the matching Rig Element.
+- Model revisions depend on Rig and Animation Elements and migrate idempotently to extraction schema 3 without reconversion.
