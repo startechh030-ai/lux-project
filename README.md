@@ -226,3 +226,10 @@ Home is now a dense project-library workspace inspired by Unreal/Unity hubs: nar
 - Model revision manifests and Room dependency rows expose the Model → Material → Texture family tree.
 - Image-only picker selections create standalone library Texture Elements instead of unsupported queue jobs; model+image selections still treat images as companion resources.
 - Supported standalone image Elements include PNG, JPEG, BMP, WEBP, TGA, DDS, SVG, GIF, HEIC/HEIF, and AVIF, with fallback thumbnails when Android cannot decode the source.
+
+## Phase 3B.2 Geometry Elements — 0.25.0
+
+- Creates one dependency-scoped Geometry Element per glTF mesh without copying BIN data.
+- Geometry manifests reference the source Model revision and record primitives, accessor indices, attribute layout, material assignments, morph targets, bounds, vertex/triangle counts, and topology signatures.
+- Geometry revisions depend on extracted Material Elements per primitive; Model revisions depend on Geometry Elements.
+- Existing Model Elements with extraction schema 1 are upgraded idempotently to schema 2 without Assimp reconversion.
