@@ -14,9 +14,9 @@ class AssetFamilyBuilder(private val context:Context){
     fun build(assetDir:File):JSONObject{
         val assetMetaFile=File(assetDir,"asset.json");val assetMeta=JSONObject(assetMetaFile.readText());val assetUid=assetMeta.optString("id",assetDir.name);val gltf=JSONObject(File(assetDir,"model.gltf").readText())
         val textures=extractTextures(assetDir,assetUid,gltf);val meshes=extractMeshes(gltf);val materials=extractMaterials(gltf,textures);val animations=extractAnimations(assetUid,gltf);val cameras=extractCameras(gltf);val lights=extractLights(gltf)
-        val family=JSONObject().put("format",1).put("assetUid",assetUid).put("name",assetMeta.optString("displayName",assetDir.name)).put("geometry",meshes).put("materials",materials).put("textures",textures).put("animations",animations).put("cameras",cameras).put("lights",lights).put("createdAt",System.currentTimeMillis())
+        val family=JSONObject().put("format",2).put("assetUid",assetUid).put("name",assetMeta.optString("displayName",assetDir.name)).put("sourceContentHash",assetMeta.optString("contentHash")).put("geometry",meshes).put("materials",materials).put("textures",textures).put("animations",animations).put("cameras",cameras).put("lights",lights).put("generatedAt",System.currentTimeMillis())
         File(assetDir,"family.json").writeText(family.toString(2))
-        assetMeta.put("family","family.json").put("familyFormat",1)
+        assetMeta.put("family","family.json").put("familyFormat",2)
         assetMeta.remove("elementUid");assetMeta.remove("revisionUid");assetMeta.remove("elementSchemaVersion")
         val temp=File(assetDir,"asset.json.family.tmp");temp.writeText(assetMeta.toString());assetMetaFile.delete();check(temp.renameTo(assetMetaFile));return family
     }
@@ -36,11 +36,32 @@ class AssetFamilyBuilder(private val context:Context){
         };return output
     }
 
-    private fun extractMeshes(gltf:JSONObject):JSONArray{val out=JSONArray();val meshes=gltf.optJSONArray("meshes")?:return out;val accessors=gltf.optJSONArray("accessors")?:JSONArray();for(i in 0 until meshes.length()){val mesh=meshes.optJSONObject(i)?:continue;val primitives=mesh.optJSONArray("primitives")?:JSONArray();var vertices=0L;var triangles=0L;for(p in 0 until primitives.length()){val primitive=primitives.optJSONObject(p)?:continue;val position=primitive.optJSONObject("attributes")?.optInt("POSITION",-1)?:-1;val vc=accessors.optJSONObject(position)?.optLong("count",0)?:0;vertices+=vc;val indices=primitive.optInt("indices",-1);val count=if(indices>=0)accessors.optJSONObject(indices)?.optLong("count",0)?:0 else vc;triangles+=if(primitive.optInt("mode",4)==4)count/3 else 0};out.put(JSONObject().put("index",i).put("name",mesh.optString("name").ifBlank{"Mesh ${i+1}"}).put("primitiveCount",primitives.length()).put("vertexCount",vertices).put("triangleCount",triangles))};return out}
-    private fun extractMaterials(gltf:JSONObject,textures:JSONArray):JSONArray{val out=JSONArray();val materials=gltf.optJSONArray("materials")?:return out;for(i in 0 until materials.length()){val material=materials.optJSONObject(i)?:continue;out.put(JSONObject().put("index",i).put("name",material.optString("name").ifBlank{"Material ${i+1}"}).put("data",material))};return out}
+    private fun extractMeshes(gltf:JSONObject):JSONArray{
+        val out=JSONArray();val meshes=gltf.optJSONArray("meshes")?:return out;val accessors=gltf.optJSONArray("accessors")?:JSONArray()
+        for(i in 0 until meshes.length()){
+            val mesh=meshes.optJSONObject(i)?:continue;val primitives=mesh.optJSONArray("primitives")?:JSONArray();var vertices=0L;var triangles=0L;val materialIndices=linkedSetOf<Int>()
+            for(p in 0 until primitives.length()){
+                val primitive=primitives.optJSONObject(p)?:continue;val position=primitive.optJSONObject("attributes")?.optInt("POSITION",-1)?:-1;val vc=accessors.optJSONObject(position)?.optLong("count",0)?:0;vertices+=vc
+                val indices=primitive.optInt("indices",-1);val count=if(indices>=0)accessors.optJSONObject(indices)?.optLong("count",0)?:0 else vc;triangles+=if(primitive.optInt("mode",4)==4)count/3 else 0;primitive.optInt("material",-1).takeIf{it>=0}?.let(materialIndices::add)
+            }
+            out.put(JSONObject().put("meshIndex",i).put("name",mesh.optString("name").ifBlank{"Mesh ${i+1}"}).put("primitiveCount",primitives.length()).put("vertexCount",vertices).put("triangleCount",triangles).put("materialIndices",JSONArray(materialIndices.toList())))
+        };return out
+    }
+
+    private fun extractMaterials(gltf:JSONObject,libraryTextures:JSONArray):JSONArray{
+        val out=JSONArray();val materials=gltf.optJSONArray("materials")?:return out;val imagesByIndex=mutableMapOf<Int,String>();for(i in 0 until libraryTextures.length()){val item=libraryTextures.optJSONObject(i)?:continue;imagesByIndex[item.optInt("index")]=item.optString("uid")}
+        val gltfTextures=gltf.optJSONArray("textures")?:JSONArray();fun textureUid(slot:JSONObject?):String?{val textureIndex=slot?.optInt("index",-1)?:-1;val imageIndex=gltfTextures.optJSONObject(textureIndex)?.optInt("source",-1)?:-1;return imagesByIndex[imageIndex]}
+        for(i in 0 until materials.length()){
+            val material=materials.optJSONObject(i)?:continue;val pbr=material.optJSONObject("pbrMetallicRoughness");val bindings=JSONObject()
+            listOf("baseColor" to textureUid(pbr?.optJSONObject("baseColorTexture")),"metallicRoughness" to textureUid(pbr?.optJSONObject("metallicRoughnessTexture")),"normal" to textureUid(material.optJSONObject("normalTexture")),"occlusion" to textureUid(material.optJSONObject("occlusionTexture")),"emissive" to textureUid(material.optJSONObject("emissiveTexture"))).forEach{(role,uid)->if(!uid.isNullOrBlank())bindings.put(role,uid)}
+            val shader=when{material.optJSONObject("extensions")?.has("KHR_materials_unlit")==true->"unlit";material.optString("alphaMode","OPAQUE")=="BLEND"->"transparent_pbr";else->"standard_pbr"}
+            out.put(JSONObject().put("materialIndex",i).put("name",material.optString("name").ifBlank{"Material ${i+1}"}).put("shader",shader).put("alphaMode",material.optString("alphaMode","OPAQUE")).put("doubleSided",material.optBoolean("doubleSided",false)).put("textures",bindings))
+        };return out
+    }
+
     private fun extractAnimations(assetUid:String,gltf:JSONObject):JSONArray{val out=JSONArray();val animations=gltf.optJSONArray("animations")?:return out;val folder=File(fs.libraryAnimation,assetUid).apply{mkdirs()};for(i in 0 until animations.length()){val animation=animations.optJSONObject(i)?:continue;val name=animation.optString("name").ifBlank{"Animation ${i+1}"};val file=File(folder,"${safe(name)}.anim");file.writeText(JSONObject().put("format",1).put("uid","anim-$assetUid-$i").put("name",name).put("sourceAsset",assetUid).put("animationIndex",i).put("samplers",animation.optJSONArray("samplers")?:JSONArray()).put("channels",animation.optJSONArray("channels")?:JSONArray()).toString(2));out.put(JSONObject().put("index",i).put("uid","anim-$assetUid-$i").put("name",name).put("libraryPath",file.relativeTo(fs.library).invariantSeparatorsPath))};return out}
-    private fun extractCameras(gltf:JSONObject)=gltf.optJSONArray("cameras")?:JSONArray()
-    private fun extractLights(gltf:JSONObject)=gltf.optJSONObject("extensions")?.optJSONObject("KHR_lights_punctual")?.optJSONArray("lights")?:JSONArray()
+    private fun extractCameras(gltf:JSONObject):JSONArray{val out=JSONArray();val cameras=gltf.optJSONArray("cameras")?:return out;for(i in 0 until cameras.length()){val camera=cameras.optJSONObject(i)?:continue;out.put(JSONObject().put("cameraIndex",i).put("name",camera.optString("name").ifBlank{"Camera ${i+1}"}).put("type",camera.optString("type","unknown")))};return out}
+    private fun extractLights(gltf:JSONObject):JSONArray{val out=JSONArray();val lights=gltf.optJSONObject("extensions")?.optJSONObject("KHR_lights_punctual")?.optJSONArray("lights")?:return out;for(i in 0 until lights.length()){val light=lights.optJSONObject(i)?:continue;out.put(JSONObject().put("lightIndex",i).put("name",light.optString("name").ifBlank{"Light ${i+1}"}).put("type",light.optString("type","unknown")))};return out}
     private fun linkOrCopy(source:File,target:File){target.parentFile?.mkdirs();val linked=runCatching{java.nio.file.Files.createLink(target.toPath(),source.toPath());true}.getOrDefault(false);if(!linked)source.copyTo(target,true)}
     private fun imageDimensions(file:File):Pair<Int,Int>{val o=BitmapFactory.Options().apply{inJustDecodeBounds=true};BitmapFactory.decodeFile(file.absolutePath,o);return o.outWidth.coerceAtLeast(0) to o.outHeight.coerceAtLeast(0)}
     private fun usageForImage(image:Int,gltf:JSONObject):String{val textures=gltf.optJSONArray("textures")?:return "unknown";val map=mutableMapOf<Int,Int>();for(i in 0 until textures.length())map[i]=textures.optJSONObject(i)?.optInt("source",-1)?:-1;val materials=gltf.optJSONArray("materials")?:return "unknown";for(i in 0 until materials.length()){val m=materials.optJSONObject(i)?:continue;val p=m.optJSONObject("pbrMetallicRoughness");listOf("baseColor" to p?.optJSONObject("baseColorTexture"),"metallicRoughness" to p?.optJSONObject("metallicRoughnessTexture"),"normal" to m.optJSONObject("normalTexture"),"occlusion" to m.optJSONObject("occlusionTexture"),"emissive" to m.optJSONObject("emissiveTexture")).forEach{(role,slot)->if(map[slot?.optInt("index",-1)]==image)return role}};return "unknown"}

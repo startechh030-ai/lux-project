@@ -255,3 +255,19 @@ Home is now a dense project-library workspace inspired by Unreal/Unity hubs: nar
 - Standalone image imports become typed Library Texture resources instead of Model Assets or Ulelements.
 - `library/Element/` is reserved exclusively for project-created text `.ulelement` family manifests and payloads.
 - One-time cleanup removes the previous automatic Model/Texture/Material/Geometry/Rig/Animation/System-Shader Element registry entries and lowercase auto-manifest folder while retaining shared blobs.
+
+## glTF ZIP source normalization — 0.27.2
+
+- Validates extracted `.gltf` entries before conversion, rejects zero-byte/incomplete entries, ignores macOS archive metadata, and verifies declared ZIP entry sizes.
+- Normalizes UTF-8 BOM, UTF-16 LE/BE, trailing NUL bytes, and whitespace before parsing JSON.
+- Detects Git LFS pointers and mislabeled XML/HTML files with explicit errors.
+- Writes normalized glTF transactionally before texture repair and structural validation.
+
+## Lightweight Asset family index — 0.27.3
+
+- `family.json` format 2 is a small Luxe resource index, not a duplicate scene description.
+- Geometry entries retain only names, glTF indices, counts, and material indices.
+- Material entries retain only names, glTF indices, shader class, render flags, and Library texture UIDs.
+- Animation entries point to `.anim` descriptors; cameras/lights retain only names, indices, and types.
+- Full primitives, accessors, material payloads, channels, samplers, transforms, and scene hierarchy remain authoritative in `model.gltf`.
+- Existing format-1 families rebuild automatically from glTF and Library descriptors.

@@ -30,7 +30,7 @@ class PersistentImportProcessor(private val context:Context){
             }
             val candidates=if(job.sourceFormat=="zip"||job.sourceFormat=="zae"){ 
                 progress(15,"Exploring nested ZIP package")
-                SafeZipExtractor.extractRecursive(source,File(stage,"unpacked")).files.filter{it.extension.lowercase() in supported}.distinctBy{it.canonicalPath}
+                SafeZipExtractor.extractRecursive(source,File(stage,"unpacked")).files.filter{it.isFile&&it.length()>0&&it.extension.lowercase() in supported}.distinctBy{it.canonicalPath}
             }else listOf(source)
             if(candidates.isEmpty())error("No supported model found")
             candidates.forEachIndexed{index,candidate->
@@ -44,7 +44,7 @@ class PersistentImportProcessor(private val context:Context){
                     if(candidate.extension.equals("gltf",true)){
                         // Already-canonical glTF must not depend on Assimp reader registration.
                         // Preserve JSON and companion resources, then run Luxe repair/validation.
-                        candidate.copyTo(File(transaction,"model.gltf"),true)
+                        GltfSourceNormalizer.normalize(candidate,File(transaction,"model.gltf"))
                         nativeMetadata=JSONObject().put("profile","preserve_gltf_direct").put("sourceExtension","gltf").put("sourceUpAxis","unknown").put("unitScaleFactor",1.0).put("animationCount",0).put("cameraCount",0).put("lightCount",0).put("materialCount",0).put("hasBones",false).put("warnings",JSONArray())
                     }else{
                         val nativeError=bridge.nativeConvertToGltf(candidate.absolutePath,transaction.absolutePath);if(nativeError.isNotEmpty())error(nativeError)

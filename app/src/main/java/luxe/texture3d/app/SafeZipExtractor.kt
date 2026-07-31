@@ -18,7 +18,8 @@ object SafeZipExtractor {
                 while(true){val entry=input.nextEntry?:break;entries++;require(entries<=limits.maxEntries){"ZIP contains too many files"}
                     val out=File(target,entry.name).canonicalFile
                     require(out.path==canonicalRoot.path||out.path.startsWith(canonicalRoot.path+File.separator)){"Unsafe ZIP path blocked"}
-                    if(entry.isDirectory)out.mkdirs() else{out.parentFile?.mkdirs();FileOutputStream(out).use{o->val buffer=ByteArray(128*1024);while(true){val n=input.read(buffer);if(n<0)break;bytes+=n;require(bytes<=limits.maxExpandedBytes){"Expanded ZIP is too large"};o.write(buffer,0,n)}};all+=out}
+                    val ignored=entry.name.split('/').any{it=="__MACOSX"||it.startsWith("._")}
+                    if(entry.isDirectory)out.mkdirs() else if(!ignored){out.parentFile?.mkdirs();FileOutputStream(out).use{o->val buffer=ByteArray(128*1024);while(true){val n=input.read(buffer);if(n<0)break;if(n==0)continue;bytes+=n;require(bytes<=limits.maxExpandedBytes){"Expanded ZIP is too large"};o.write(buffer,0,n)}};if(entry.size>=0)require(out.length()==entry.size){"Incomplete ZIP entry: ${entry.name}"};all+=out}
                     input.closeEntry()
                 }
             }
