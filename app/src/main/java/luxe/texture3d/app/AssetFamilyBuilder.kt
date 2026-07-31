@@ -15,7 +15,10 @@ class AssetFamilyBuilder(private val context:Context){
         val assetMetaFile=File(assetDir,"asset.json");val assetMeta=JSONObject(assetMetaFile.readText());val assetUid=assetMeta.optString("id",assetDir.name);val gltf=JSONObject(File(assetDir,"model.gltf").readText())
         val textures=extractTextures(assetDir,assetUid,gltf);val meshes=extractMeshes(gltf);val materials=extractMaterials(gltf,textures);val animations=extractAnimations(assetUid,gltf);val cameras=extractCameras(gltf);val lights=extractLights(gltf)
         val family=JSONObject().put("format",1).put("assetUid",assetUid).put("name",assetMeta.optString("displayName",assetDir.name)).put("geometry",meshes).put("materials",materials).put("textures",textures).put("animations",animations).put("cameras",cameras).put("lights",lights).put("createdAt",System.currentTimeMillis())
-        File(assetDir,"family.json").writeText(family.toString(2));assetMeta.put("family","family.json").put("familyFormat",1).remove("elementUid").remove("revisionUid").remove("elementSchemaVersion");val temp=File(assetDir,"asset.json.family.tmp");temp.writeText(assetMeta.toString());assetMetaFile.delete();check(temp.renameTo(assetMetaFile));return family
+        File(assetDir,"family.json").writeText(family.toString(2))
+        assetMeta.put("family","family.json").put("familyFormat",1)
+        assetMeta.remove("elementUid");assetMeta.remove("revisionUid");assetMeta.remove("elementSchemaVersion")
+        val temp=File(assetDir,"asset.json.family.tmp");temp.writeText(assetMeta.toString());assetMetaFile.delete();check(temp.renameTo(assetMetaFile));return family
     }
 
     fun importStandaloneImage(source:File,displayName:String):String{
