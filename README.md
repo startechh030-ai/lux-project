@@ -246,3 +246,12 @@ Home is now a dense project-library workspace inspired by Unreal/Unity hubs: nar
 - JSON `.gltf` candidates bypass Assimp importer detection and are copied through Luxe's non-destructive resource, texture, validation, metadata, and Element extraction pipelines.
 - ZIP packages containing glTF no longer fail when selective Assimp builds report no suitable glTF reader.
 - `.zae` is treated as a COLLADA archive and recursively extracted with the same ZIP security limits.
+
+## Final Asset / Library cleanup — 0.27.0
+
+- Imported models remain Assets and receive `family.json`; they no longer auto-create Ulelements.
+- Imported textures are hard-linked/deduplicated into `library/Texture/<asset-family>/` with `.texture` descriptors.
+- Imported animations become lightweight `.anim` Library descriptors referencing source Asset/BIN accessors; no Rig files are generated.
+- Standalone image imports become typed Library Texture resources instead of Model Assets or Ulelements.
+- `library/Element/` is reserved exclusively for project-created text `.ulelement` family manifests and payloads.
+- One-time cleanup removes the previous automatic Model/Texture/Material/Geometry/Rig/Animation/System-Shader Element registry entries and lowercase auto-manifest folder while retaining shared blobs.

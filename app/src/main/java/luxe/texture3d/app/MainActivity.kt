@@ -43,7 +43,7 @@ class MainActivity : AppCompatActivity() {
 
 
 
-    override fun onCreate(savedInstanceState:Bundle?){super.onCreate(savedInstanceState);appFiles.recoverStaging();ImportQueueScheduler.ensureRunning(this);WindowCompat.setDecorFitsSystemWindows(window,false);window.statusBarColor=Color.TRANSPARENT;window.navigationBarColor=Color.TRANSPARENT;window.setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,WindowManager.LayoutParams.FLAG_FULLSCREEN);setContentView(buildShell());applyImmersiveMode();showHome();AssetMetadataMigrator.migrateAsync(this){kotlinx.coroutines.runBlocking{ElementRegistry(this@MainActivity).migrateLegacyAssets();ProjectRegistry(this@MainActivity).migrateWorkingProjects()};runOnUiThread{if(activePage==0)showHome()}}}
+    override fun onCreate(savedInstanceState:Bundle?){super.onCreate(savedInstanceState);appFiles.recoverStaging();ImportQueueScheduler.ensureRunning(this);WindowCompat.setDecorFitsSystemWindows(window,false);window.statusBarColor=Color.TRANSPARENT;window.navigationBarColor=Color.TRANSPARENT;window.setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,WindowManager.LayoutParams.FLAG_FULLSCREEN);setContentView(buildShell());applyImmersiveMode();showHome();AssetMetadataMigrator.migrateAsync(this){AssetFamilyMigrator.migrateAsync(this@MainActivity){kotlinx.coroutines.runBlocking{LegacyAutoElementCleanup.runOnce(this@MainActivity);ProjectRegistry(this@MainActivity).migrateWorkingProjects()};runOnUiThread{if(activePage==0)showHome()}}}}
     override fun onResume(){super.onResume();applyImmersiveMode();if(::content.isInitialized){if(activePage==0)showHome() else if(activePage==1)showProjects()}}
     override fun onWindowFocusChanged(hasFocus:Boolean){super.onWindowFocusChanged(hasFocus);if(hasFocus)applyImmersiveMode()}
 

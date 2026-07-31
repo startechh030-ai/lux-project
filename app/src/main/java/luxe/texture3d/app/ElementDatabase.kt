@@ -36,6 +36,10 @@ interface ElementDao {
     @Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun putDependencies(values:List<ElementDependencyEntity>)
     @Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun putBlobRefs(values:List<ElementBlobRefEntity>)
     @Query("SELECT COUNT(*) FROM project_element_refs WHERE elementUid=:uid") suspend fun projectUsageCount(uid:String):Int
+    @Query("DELETE FROM element_dependencies WHERE parentRevisionUid IN (SELECT uid FROM element_revisions WHERE elementUid IN (SELECT uid FROM elements WHERE type IN ('model','texture','material','geometry','rig','animation','shader'))) OR childElementUid IN (SELECT uid FROM elements WHERE type IN ('model','texture','material','geometry','rig','animation','shader'))") suspend fun purgeAutoDependencies()
+    @Query("DELETE FROM element_blob_refs WHERE revisionUid IN (SELECT uid FROM element_revisions WHERE elementUid IN (SELECT uid FROM elements WHERE type IN ('model','texture','material','geometry','rig','animation','shader')))") suspend fun purgeAutoBlobRefs()
+    @Query("DELETE FROM element_revisions WHERE elementUid IN (SELECT uid FROM elements WHERE type IN ('model','texture','material','geometry','rig','animation','shader'))") suspend fun purgeAutoRevisions()
+    @Query("DELETE FROM elements WHERE type IN ('model','texture','material','geometry','rig','animation','shader')") suspend fun purgeAutoElements()
 }
 
 @Dao

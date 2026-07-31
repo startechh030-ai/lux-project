@@ -6,7 +6,6 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import org.json.JSONArray
 import org.json.JSONObject
-import kotlinx.coroutines.runBlocking
 import java.io.*
 import java.util.UUID
 
@@ -26,11 +25,8 @@ class PersistentImportProcessor(private val context:Context){
             val imageExtensions=setOf("png","jpg","jpeg","tga","bmp","webp","dds","svg","gif","heic","heif","avif")
             if(job.sourceFormat in imageExtensions){
                 progress(45,"Creating Texture Element")
-                val element=runBlocking{ModelElementExtractor(context).registerStandaloneTexture(source,job.displayName)}
-                val transaction=File(files.assets,".converting-${element.uid}").apply{deleteRecursively();mkdirs()};createThumbnail(stage,File(transaction,"thumbnail.png"))
-                File(transaction,"asset.json").writeText(JSONObject().put("id",element.uid).put("elementUid",element.uid).put("revisionUid",element.currentRevisionUid).put("displayName",job.displayName).put("sourceFormat",job.sourceFormat).put("status","ready").put("assetKind","texture").put("meshCount",0).put("triangleCount",0).put("textureCount",1).put("thumbnail","thumbnail.png").put("createdAt",System.currentTimeMillis()).toString())
-                val finalFolder=File(files.assets,element.uid);if(finalFolder.exists())transaction.deleteRecursively()else check(transaction.renameTo(finalFolder)){"Unable to finalize Texture Element projection"}
-                return Result("COMPLETED",listOf(element.uid))
+                val resourceUid=AssetFamilyBuilder(context).importStandaloneImage(source,job.displayName)
+                return Result("COMPLETED",listOf(resourceUid))
             }
             val candidates=if(job.sourceFormat=="zip"||job.sourceFormat=="zae"){ 
                 progress(15,"Exploring nested ZIP package")
@@ -73,7 +69,7 @@ class PersistentImportProcessor(private val context:Context){
                     File(transaction,"asset.json").writeText(metadata.toString())
                     check(!finalOutput.exists()){ "Asset destination already exists" }
                     check(transaction.renameTo(finalOutput)){ "Unable to finalize converted asset" }
-                    check(runBlocking{ElementRegistry(context).registerModelAsset(finalOutput)}!=null){"Unable to register Model Element"}
+                    AssetFamilyBuilder(context).build(finalOutput)
                     created+=assetId;newAssets++
                 }.onFailure{transaction.deleteRecursively();finalOutput.takeIf{it.exists()&&!File(it,"asset.json").exists()}?.deleteRecursively();errors+="${candidate.name}: ${it.message}"}
             }
