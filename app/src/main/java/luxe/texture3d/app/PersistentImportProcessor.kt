@@ -32,7 +32,7 @@ class PersistentImportProcessor(private val context:Context){
                 val finalFolder=File(files.assets,element.uid);if(finalFolder.exists())transaction.deleteRecursively()else check(transaction.renameTo(finalFolder)){"Unable to finalize Texture Element projection"}
                 return Result("COMPLETED",listOf(element.uid))
             }
-            val candidates=if(job.sourceFormat=="zip"){ 
+            val candidates=if(job.sourceFormat=="zip"||job.sourceFormat=="zae"){ 
                 progress(15,"Exploring nested ZIP package")
                 SafeZipExtractor.extractRecursive(source,File(stage,"unpacked")).files.filter{it.extension.lowercase() in supported}.distinctBy{it.canonicalPath}
             }else listOf(source)
@@ -44,10 +44,17 @@ class PersistentImportProcessor(private val context:Context){
                 transaction.deleteRecursively();transaction.mkdirs()
                 runCatching{
                     copyResources(candidate.parentFile?:stage,transaction)
-                    val nativeError=bridge.nativeConvertToGltf(candidate.absolutePath,transaction.absolutePath);if(nativeError.isNotEmpty())error(nativeError)
-                    val nativeMetadataFile=File(transaction,"conversion_native.json")
-                    val nativeMetadata=runCatching{JSONObject(nativeMetadataFile.readText())}.getOrElse{JSONObject()}
-                    nativeMetadataFile.delete()
+                    val nativeMetadata:JSONObject
+                    if(candidate.extension.equals("gltf",true)){
+                        // Already-canonical glTF must not depend on Assimp reader registration.
+                        // Preserve JSON and companion resources, then run Luxe repair/validation.
+                        candidate.copyTo(File(transaction,"model.gltf"),true)
+                        nativeMetadata=JSONObject().put("profile","preserve_gltf_direct").put("sourceExtension","gltf").put("sourceUpAxis","unknown").put("unitScaleFactor",1.0).put("animationCount",0).put("cameraCount",0).put("lightCount",0).put("materialCount",0).put("hasBones",false).put("warnings",JSONArray())
+                    }else{
+                        val nativeError=bridge.nativeConvertToGltf(candidate.absolutePath,transaction.absolutePath);if(nativeError.isNotEmpty())error(nativeError)
+                        val nativeMetadataFile=File(transaction,"conversion_native.json")
+                        nativeMetadata=runCatching{JSONObject(nativeMetadataFile.readText())}.getOrElse{JSONObject()};nativeMetadataFile.delete()
+                    }
                     progress(78+(index*7/candidates.size),"Collecting textures for ${candidate.name}")
                     val textureReport=GltfTexturePipeline.process(transaction,stage)
                     progress(86+(index*6/candidates.size),"Validating ${candidate.name}")

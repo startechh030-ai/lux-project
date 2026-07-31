@@ -22,7 +22,7 @@ object SafeZipExtractor {
                     input.closeEntry()
                 }
             }
-            target.walkTopDown().filter{it.isFile&&it.extension.equals("zip",true)}.toList().forEachIndexed{i,nested->extract(nested,File(nested.parentFile,"${nested.nameWithoutExtension}_unpacked_$i"),depth+1)}
+            target.walkTopDown().filter{it.isFile&&it.extension.lowercase() in setOf("zip","zae")}.toList().forEachIndexed{i,nested->extract(nested,File(nested.parentFile,"${nested.nameWithoutExtension}_unpacked_$i"),depth+1)}
         }
         extract(source,destination,0);return Result(all.distinct(),bytes)
     }

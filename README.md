@@ -240,3 +240,9 @@ Home is now a dense project-library workspace inspired by Unreal/Unity hubs: nar
 - Creates one Animation Element per glTF animation with duration, channels, samplers, interpolation, target paths, rig compatibility, and root-motion candidate metadata.
 - Geometry Elements that are instantiated with a skin depend on the matching Rig Element.
 - Model revisions depend on Rig and Animation Elements and migrate idempotently to extraction schema 3 without reconversion.
+
+## Direct glTF packages and ZAE — 0.26.1
+
+- JSON `.gltf` candidates bypass Assimp importer detection and are copied through Luxe's non-destructive resource, texture, validation, metadata, and Element extraction pipelines.
+- ZIP packages containing glTF no longer fail when selective Assimp builds report no suitable glTF reader.
+- `.zae` is treated as a COLLADA archive and recursively extracted with the same ZIP security limits.
