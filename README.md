@@ -271,3 +271,10 @@ Home is now a dense project-library workspace inspired by Unreal/Unity hubs: nar
 - Animation entries point to `.anim` descriptors; cameras/lights retain only names, indices, and types.
 - Full primitives, accessors, material payloads, channels, samplers, transforms, and scene hierarchy remain authoritative in `model.gltf`.
 - Existing format-1 families rebuild automatically from glTF and Library descriptors.
+
+## Phase 3C.1 Unified Resource Browser — 0.28.0
+
+- Replaced the basic Asset grid with a reusable full-screen browser component prepared for later floating editor use.
+- Added logical sections for Projects, Assets, typed Library folders, project-created Elements, Recent, and Trash.
+- Asset family trees read lightweight `family.json` and expose Geometry, Materials, Textures, Animations, Cameras, and Lights without parsing raw glTF in the UI.
+- Added responsive tree pane, grid/list toggle, search, sorting, friendly metadata, sampled thumbnails, and category counts.
