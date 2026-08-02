@@ -278,3 +278,11 @@ Home is now a dense project-library workspace inspired by Unreal/Unity hubs: nar
 - Added logical sections for Projects, Assets, typed Library folders, project-created Elements, Recent, and Trash.
 - Asset family trees read lightweight `family.json` and expose Geometry, Materials, Textures, Animations, Cameras, and Lights without parsing raw glTF in the UI.
 - Added responsive tree pane, grid/list toggle, search, sorting, friendly metadata, sampled thumbnails, and category counts.
+
+## Phase 3C.2 Resource Inspector and Actions — 0.29.0
+
+- Browser selection opens a right-side Inspector with thumbnail, metadata, favorite state, validation, rename, ULX rebuild, Trash, restore, and permanent-delete actions where applicable.
+- Asset, project, descriptor, and Ulelement validators report custom Luxe modal results.
+- Rename updates friendly metadata without changing runtime IDs; project rename rebuilds ULX.
+- Trash is soft deletion with original-location metadata, restore, and custom permanent-delete confirmation.
+- Favorites are user-state preferences and do not modify payload files.
