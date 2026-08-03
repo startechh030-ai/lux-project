@@ -286,3 +286,10 @@ Home is now a dense project-library workspace inspired by Unreal/Unity hubs: nar
 - Rename updates friendly metadata without changing runtime IDs; project rename rebuilds ULX.
 - Trash is soft deletion with original-location metadata, restore, and custom permanent-delete confirmation.
 - Favorites are user-state preferences and do not modify payload files.
+
+## Phase 3C.3 Floating Resource Browser — 0.30.0
+
+- Added editor-embedded Resource Browser panel with draggable title bar, bottom-corner resizing, minimize, maximize/restore, close, viewport clamping, and compact-phone maximize behavior.
+- Normalized position/size and window state persist across sessions and screen sizes; browser section, query, sort, and grid/list mode also persist.
+- Browser panel consumes touch inside its bounds so Filament viewport orbit/pan/zoom only receives touches outside it.
+- Added Phase 4 callback contract for project, asset, Library resource, Ulelement, Add to Project, and Add to Scene actions.

@@ -40,6 +40,7 @@ class EditorActivity : AppCompatActivity(), Choreographer.FrameCallback {
     private lateinit var manipulator: Manipulator
     private lateinit var editorGrid: EditorGrid
     private lateinit var status: TextView
+    private lateinit var resourceBrowserPanel: FloatingResourceBrowserPanel
     private var solidSkybox: Skybox? = null
     private var rendering = false
 
@@ -79,7 +80,7 @@ class EditorActivity : AppCompatActivity(), Choreographer.FrameCallback {
             setBackgroundResource(luxe.texture3d.app.R.drawable.panel_bg)
             setColorFilter(0xffbae6fd.toInt())
             setPadding(dp(12), dp(12), dp(12), dp(12))
-            setOnClickListener { startActivity(android.content.Intent(this@EditorActivity, AssetLibraryActivity::class.java)) }
+            setOnClickListener { resourceBrowserPanel.togglePanel() }
         }
         root.addView(open, FrameLayout.LayoutParams(dp(52), dp(52), Gravity.TOP or Gravity.START).apply {
             leftMargin = dp(10); topMargin = dp(10)
@@ -107,6 +108,8 @@ class EditorActivity : AppCompatActivity(), Choreographer.FrameCallback {
         }
         status.alpha = 0f
         root.addView(status, FrameLayout.LayoutParams(1, 1, Gravity.BOTTOM))
+        resourceBrowserPanel = FloatingResourceBrowserPanel(this).apply { visibility = View.GONE }
+        root.addView(resourceBrowserPanel, FrameLayout.LayoutParams(-1, -1))
         setContentView(root)
         applyImmersiveMode()
 
