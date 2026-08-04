@@ -293,3 +293,10 @@ Home is now a dense project-library workspace inspired by Unreal/Unity hubs: nar
 - Normalized position/size and window state persist across sessions and screen sizes; browser section, query, sort, and grid/list mode also persist.
 - Browser panel consumes touch inside its bounds so Filament viewport orbit/pan/zoom only receives touches outside it.
 - Added Phase 4 callback contract for project, asset, Library resource, Ulelement, Add to Project, and Add to Scene actions.
+
+## Phase 4A ULX Project Sessions — 0.31.0
+
+- Opening a project validates and mounts its `.ulx` payload into a project-specific runtime session.
+- Added session locks, scene state, dirty tracking, camera-state serialization, transactional ULX save/backup replacement, autosave-on-background, and interrupted-session recovery.
+- Editor Back now exits immediately when clean or offers Cancel, Discard, and Save & Exit when dirty.
+- Temporary Save button shows a dirty indicator and writes the session safely back into ULX.

@@ -40,7 +40,9 @@ class EditorActivity : AppCompatActivity(), Choreographer.FrameCallback {
     private lateinit var manipulator: Manipulator
     private lateinit var editorGrid: EditorGrid
     private lateinit var status: TextView
+    private lateinit var saveButton: TextView
     private lateinit var resourceBrowserPanel: FloatingResourceBrowserPanel
+    private var projectSession: ProjectSessionManager? = null
     private var solidSkybox: Skybox? = null
     private var rendering = false
 
@@ -51,7 +53,7 @@ class EditorActivity : AppCompatActivity(), Choreographer.FrameCallback {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() = showDiscardEditorDialog()
+            override fun handleOnBackPressed() = handleEditorBack()
         })
         Utils.init()
         window.statusBarColor = android.graphics.Color.TRANSPARENT
@@ -69,7 +71,7 @@ class EditorActivity : AppCompatActivity(), Choreographer.FrameCallback {
         // A normal transparent View captures input above the hardware-backed
         // SurfaceView. This avoids device-specific SurfaceView touch failures.
         cameraInput = CameraInputView(this).apply {
-            onGesture = { gesture -> status.text = "CAMERA INPUT  •  $gesture" }
+            onGesture = { gesture -> status.text = "CAMERA INPUT  •  $gesture"; projectSession?.markDirty();if(::saveButton.isInitialized)saveButton.text="Save •" }
             onDoubleTap = { resetCameraHome() }
         }
         root.addView(cameraInput, FrameLayout.LayoutParams(-1, -1))
@@ -85,6 +87,13 @@ class EditorActivity : AppCompatActivity(), Choreographer.FrameCallback {
         root.addView(open, FrameLayout.LayoutParams(dp(52), dp(52), Gravity.TOP or Gravity.START).apply {
             leftMargin = dp(10); topMargin = dp(10)
         })
+
+        saveButton = TextView(this).apply {
+            text = "Save"; textSize = 13f; gravity = Gravity.CENTER; setTextColor(Color.WHITE)
+            setBackgroundResource(R.drawable.hub_primary_button)
+            setOnClickListener { saveProject(false) }
+        }
+        root.addView(saveButton, FrameLayout.LayoutParams(dp(76), dp(42), Gravity.TOP or Gravity.END).apply { rightMargin = dp(12); topMargin = dp(10) })
 
         val settings = ImageButton(this).apply {
             setImageResource(luxe.texture3d.app.R.drawable.ic_settings)
@@ -137,9 +146,8 @@ class EditorActivity : AppCompatActivity(), Choreographer.FrameCallback {
         )
         cameraInput.inputEnabled = true
 
-        intent.getStringExtra(EXTRA_PROJECT_MODEL_URI)?.let { encoded ->
-            runCatching { Uri.parse(encoded) }.getOrNull()?.let { loadGlb(it) }
-        }
+        intent.getStringExtra(EXTRA_PROJECT_PATH)?.let { openProjectSession(it) }
+            ?: intent.getStringExtra(EXTRA_PROJECT_MODEL_URI)?.let { encoded -> runCatching { Uri.parse(encoded) }.getOrNull()?.let { loadGlb(it,false) } }
     }
 
     private fun loadEnvironment() {
@@ -161,6 +169,26 @@ class EditorActivity : AppCompatActivity(), Choreographer.FrameCallback {
         val bytes = assets.open(path).use { it.readBytes() }
         return ByteBuffer.allocateDirect(bytes.size).order(ByteOrder.nativeOrder()).apply { put(bytes); flip() }
     }
+
+    private fun openProjectSession(path:String){
+        runCatching{
+            val manager=ProjectSessionManager(this,path);projectSession=manager;val opened=manager.open()
+            if(opened.recoveryAvailable)showRecoveryDialog(manager) else loadSessionModel(opened.modelFile)
+        }.onFailure{Toast.makeText(this,it.message?:"Unable to open ULX project",Toast.LENGTH_LONG).show()}
+    }
+    private fun loadSessionModel(file:File?){file?.takeIf{it.isFile}?.let{loadGlb(Uri.fromFile(it),false)}}
+    private fun captureSceneState():org.json.JSONObject{
+        val scene=projectSession?.scene()?:org.json.JSONObject();val eye=DoubleArray(3);val target=DoubleArray(3);val up=DoubleArray(3)
+        if(::manipulator.isInitialized){manipulator.getLookAt(eye,target,up);scene.put("camera",org.json.JSONObject().put("eye",org.json.JSONArray(eye.toList())).put("target",org.json.JSONArray(target.toList())).put("up",org.json.JSONArray(up.toList())))}
+        if(::viewer.isInitialized&&viewer.asset!=null&&scene.optJSONArray("instances")?.length()==0)scene.put("instances",org.json.JSONArray().put(org.json.JSONObject().put("instanceUid","instance-main").put("source","model.glb").put("name","Main Model").put("visible",true)))
+        scene.put("modifiedAt",System.currentTimeMillis());return scene
+    }
+    private fun saveProject(exitAfter:Boolean){val manager=projectSession;if(manager==null){Toast.makeText(this,"No ULX project session is open",Toast.LENGTH_SHORT).show();return};runCatching{manager.writeScene(captureSceneState());manager.save()}.onSuccess{saveButton.text="Save";Toast.makeText(this,"Project saved",Toast.LENGTH_SHORT).show();if(exitAfter){manager.closeClean();finish()}}.onFailure{Toast.makeText(this,it.message?:"Project save failed",Toast.LENGTH_LONG).show()}}
+    private fun handleEditorBack(){val manager=projectSession;if(manager==null||!manager.dirty){manager?.closeClean();finish()}else showDiscardEditorDialog()}
+    private fun showRecoveryDialog(manager:ProjectSessionManager){
+        val dialog=Dialog(this);dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);val panel=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(22),dp(18),dp(22),dp(16));setBackgroundResource(R.drawable.hub_dialog_bg);addView(TextView(this@EditorActivity).apply{text="Recover unsaved session?";textSize=18f;setTextColor(Color.WHITE)},LinearLayout.LayoutParams(-1,dp(36)));addView(TextView(this@EditorActivity).apply{text="Luxe found an autosave from an interrupted editor session.";textSize=13f;setTextColor(0xffaeb7c4.toInt())},LinearLayout.LayoutParams(-1,dp(52)))}
+        val actions=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.END};fun b(t:String,primary:Boolean,go:()->Unit)=TextView(this).apply{text=t;textSize=12f;gravity=Gravity.CENTER;setTextColor(Color.WHITE);setBackgroundResource(if(primary)R.drawable.hub_primary_button else R.drawable.hub_secondary_button);setOnClickListener{go()}}
+        actions.addView(b("Last Saved",false){dialog.dismiss();manager.openLastSaved();loadSessionModel(File(manager.sessionDir,"model.glb").takeIf{it.isFile})},LinearLayout.LayoutParams(dp(110),dp(40)));actions.addView(b("Recover",true){dialog.dismiss();manager.recoverAutosave();saveButton.text="Save •";loadSessionModel(File(manager.sessionDir,"model.glb").takeIf{it.isFile})},LinearLayout.LayoutParams(dp(100),dp(40)).apply{leftMargin=dp(8)});panel.addView(actions);dialog.setContentView(panel);dialog.setCanceledOnTouchOutside(false);dialog.show();dialog.window?.apply{setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT));setLayout((resources.displayMetrics.widthPixels*.48f).toInt(),ViewGroup.LayoutParams.WRAP_CONTENT)}}
 
     private fun resetCameraHome() {
         if (::manipulator.isInitialized) {
@@ -189,8 +217,9 @@ class EditorActivity : AppCompatActivity(), Choreographer.FrameCallback {
             setBackgroundResource(if (primary) R.drawable.hub_primary_button else R.drawable.hub_secondary_button)
             setOnClickListener { click() }
         }
-        actions.addView(modalButton("Cancel", false) { dialog.dismiss() }, LinearLayout.LayoutParams(dp(94), dp(40)))
-        actions.addView(modalButton("Discard & Exit", true) { dialog.dismiss(); finish() }, LinearLayout.LayoutParams(dp(132), dp(40)).apply { leftMargin = dp(8) })
+        actions.addView(modalButton("Cancel", false) { dialog.dismiss() }, LinearLayout.LayoutParams(dp(82), dp(40)))
+        actions.addView(modalButton("Discard", false) { dialog.dismiss(); projectSession?.closeDiscard(); finish() }, LinearLayout.LayoutParams(dp(94), dp(40)).apply { leftMargin = dp(8) })
+        actions.addView(modalButton("Save & Exit", true) { dialog.dismiss(); saveProject(true) }, LinearLayout.LayoutParams(dp(118), dp(40)).apply { leftMargin = dp(8) })
         panel.addView(actions, LinearLayout.LayoutParams(-1, dp(46)))
         dialog.setContentView(panel); dialog.setCanceledOnTouchOutside(false); dialog.show()
         dialog.window?.apply {
@@ -214,7 +243,7 @@ class EditorActivity : AppCompatActivity(), Choreographer.FrameCallback {
             .show()
     }
 
-    private fun loadGlb(uri: Uri) {
+    private fun loadGlb(uri: Uri, markDirty: Boolean = true) {
         try {
             val name = displayName(uri)
             if (!name.lowercase().endsWith(".glb")) throw IllegalArgumentException("Please choose a .glb file")
@@ -244,6 +273,7 @@ class EditorActivity : AppCompatActivity(), Choreographer.FrameCallback {
             ModelPlacement.placeOnGround(viewer.engine, viewer.asset!!)
             manipulator.jumpToBookmark(manipulator.homeBookmark)
             cameraInput.inputEnabled = true
+            if(markDirty){projectSession?.markDirty();if(::saveButton.isInitialized)saveButton.text="Save •"}
             status.text = "$name  •  ORBIT VIEW"
         } catch (_: OutOfMemoryError) {
             viewer.destroyModel()
@@ -331,7 +361,7 @@ class EditorActivity : AppCompatActivity(), Choreographer.FrameCallback {
     }
 
     override fun onResume() { super.onResume(); applyImmersiveMode(); rendering = true; Choreographer.getInstance().postFrameCallback(this) }
-    override fun onPause() { rendering = false; Choreographer.getInstance().removeFrameCallback(this); super.onPause() }
+    override fun onPause() { projectSession?.takeIf{it.dirty}?.let{runCatching{it.writeScene(captureSceneState());it.autosave()}};rendering = false; Choreographer.getInstance().removeFrameCallback(this); super.onPause() }
     override fun doFrame(frameTimeNanos: Long) {
         if (!rendering) return
         // ModelViewer.render() reads its native Manipulator and applies the
@@ -342,6 +372,7 @@ class EditorActivity : AppCompatActivity(), Choreographer.FrameCallback {
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
 
     companion object {
-        const val EXTRA_PROJECT_MODEL_URI = "luxe.project.model.uri"
+        const val EXTRA_PROJECT_PATH = "luxe.project.path"
+        const val EXTRA_PROJECT_MODEL_URI = "luxe.project.model.uri" // legacy fallback
     }
 }
