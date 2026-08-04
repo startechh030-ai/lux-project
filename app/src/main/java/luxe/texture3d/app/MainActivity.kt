@@ -189,7 +189,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun projectIcon(f:DocumentFile):Int{val m=f.findFile("project.json")?.let{runCatching{contentResolver.openInputStream(it.uri)?.bufferedReader()?.use{r->r.readText()}.orEmpty()}.getOrDefault("")}.orEmpty().lowercase();return when{"sphere" in m->R.drawable.thumb_sphere;"cylinder" in m->R.drawable.thumb_cylinder;"capsule" in m->R.drawable.thumb_capsule;"plane" in m->R.drawable.thumb_plane;"round box" in m->R.drawable.thumb_round_box;"torus" in m->R.drawable.thumb_torus;"trolls" in m->R.drawable.thumb_trolls;"cube" in m->R.drawable.thumb_cube;else->R.drawable.thumb_empty}}
     private fun projectDirs()=appFiles.projects.listFiles()?.filter{it.isDirectory}?.sortedBy{it.name.lowercase()}?.map{DocumentFile.fromFile(it)}?:emptyList()
-    private fun openProject(f:DocumentFile){val path=f.uri.path?.let(::java.io.File)?.absolutePath?:return;startActivity(Intent(this,EditorActivity::class.java).putExtra(EditorActivity.EXTRA_PROJECT_PATH,path))}
+    private fun openProject(f:DocumentFile){val path=f.uri.path?.let{rawPath->java.io.File(rawPath).absolutePath}?:return;startActivity(Intent(this,EditorActivity::class.java).putExtra(EditorActivity.EXTRA_PROJECT_PATH,path))}
     private fun rootDocument():DocumentFile=DocumentFile.fromFile(appFiles.projects)
     private fun displayFolderName()="Luxe Projects"
     private fun templateAdapter()=object:BaseAdapter(){
