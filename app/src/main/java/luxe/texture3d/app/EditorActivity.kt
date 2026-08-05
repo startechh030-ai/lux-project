@@ -188,7 +188,30 @@ class EditorActivity : AppCompatActivity(), Choreographer.FrameCallback {
     private fun addResourceToProject(path:String){
         val manager=projectSession?:run{Toast.makeText(this,"No project session is open",Toast.LENGTH_SHORT).show();return};val file=File(path);val library=AppFileSystem(this).library;val storedPath=runCatching{file.relativeTo(library).invariantSeparatorsPath}.getOrDefault(file.absolutePath);val type=when(file.extension.lowercase()){"ulelement"->"ulelement";"anim"->"animation";"texture"->"texture";else->"resource"};manager.addResourceReference(storedPath,type);saveButton.text="Save •";Toast.makeText(this,"${type.replaceFirstChar{it.uppercase()}} added to project",Toast.LENGTH_SHORT).show()
     }
-    private fun requestOpenProject(path:String){val manager=projectSession;if(manager==null||!manager.dirty){switchProject(path);return};val dialog=Dialog(this);dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);val panel=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(20),dp(16),dp(20),dp(14));setBackgroundResource(R.drawable.hub_dialog_bg);addView(TextView(this@EditorActivity).apply{text="Open another project?";textSize=17f;setTextColor(Color.WHITE)},LinearLayout.LayoutParams(-1,dp(34)));addView(TextView(this@EditorActivity).apply{text="Save or discard current changes before opening the selected project.";textSize=12f;setTextColor(0xffaab4c2.toInt())},LinearLayout.LayoutParams(-1,dp(50)))};val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.END};fun b(t:String,primary:Boolean,go:()->Unit)=TextView(this).apply{text=t;gravity=Gravity.CENTER;textSize=12f;setTextColor(Color.WHITE);setBackgroundResource(if(primary)R.drawable.hub_primary_button else R.drawable.hub_secondary_button);setOnClickListener{go()}};row.addView(b("Cancel",false){dialog.dismiss()},LinearLayout.LayoutParams(dp(82),dp(38)));row.addView(b("Discard",false){dialog.dismiss();manager.closeDiscard();switchProject(path)},LinearLayout.LayoutParams(dp(90),dp(38)).apply{leftMargin=dp(7)});row.addView(b("Save & Open",true){dialog.dismiss();runCatching{manager.writeScene(captureSceneState());manager.save()}.onSuccess{switchProject(path)}.onFailure{Toast.makeText(this@EditorActivity,it.message?:"Save failed",Toast.LENGTH_LONG).show()}},LinearLayout.LayoutParams(dp(112),dp(38)).apply{leftMargin=dp(7)});panel.addView(row);dialog.setContentView(panel);dialog.show();dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))}
+    private fun requestOpenProject(path:String){
+        val manager=projectSession
+        if(manager==null||!manager.dirty){switchProject(path);return}
+        val dialog=Dialog(this);dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
+        val panel=LinearLayout(this).apply{
+            orientation=LinearLayout.VERTICAL;setPadding(dp(20),dp(16),dp(20),dp(14));setBackgroundResource(R.drawable.hub_dialog_bg)
+            addView(TextView(this@EditorActivity).apply{text="Open another project?";textSize=17f;setTextColor(Color.WHITE)},LinearLayout.LayoutParams(-1,dp(34)))
+            addView(TextView(this@EditorActivity).apply{text="Save or discard current changes before opening the selected project.";textSize=12f;setTextColor(0xffaab4c2.toInt())},LinearLayout.LayoutParams(-1,dp(50)))
+        }
+        fun projectButton(label:String,primary:Boolean,click:()->Unit)=TextView(this).apply{
+            text=label;gravity=Gravity.CENTER;textSize=12f;setTextColor(Color.WHITE)
+            setBackgroundResource(if(primary)R.drawable.hub_primary_button else R.drawable.hub_secondary_button)
+            setOnClickListener{click()}
+        }
+        val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.END}
+        row.addView(projectButton("Cancel",false,{dialog.dismiss()}),LinearLayout.LayoutParams(dp(82),dp(38)))
+        row.addView(projectButton("Discard",false,{dialog.dismiss();manager.closeDiscard();switchProject(path)}),LinearLayout.LayoutParams(dp(90),dp(38)).apply{leftMargin=dp(7)})
+        row.addView(projectButton("Save & Open",true,{
+            dialog.dismiss()
+            runCatching{manager.writeScene(captureSceneState());manager.save()}.onSuccess{switchProject(path)}.onFailure{Toast.makeText(this@EditorActivity,it.message?:"Save failed",Toast.LENGTH_LONG).show()}
+        }),LinearLayout.LayoutParams(dp(112),dp(38)).apply{leftMargin=dp(7)})
+        panel.addView(row);dialog.setContentView(panel);dialog.show();dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+    }
+
     private fun switchProject(path:String){startActivity(Intent(this,EditorActivity::class.java).putExtra(EXTRA_PROJECT_PATH,path));finish()}
 
     private fun openProjectSession(path:String){
