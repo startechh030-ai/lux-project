@@ -24,6 +24,7 @@ class ProjectSessionManager(context:Context,projectPath:String){
     fun markDirty(){dirty=true}
     fun scene():JSONObject{val file=File(sessionDir,"scene.json");if(!file.isFile)file.writeText(defaultScene().toString(2));return JSONObject(file.readText())}
     fun writeScene(scene:JSONObject){File(sessionDir,"scene.json").writeText(scene.toString(2));markDirty()}
+    fun addResourceReference(path:String,type:String){val scene=scene();val key=if(type=="ulelement")"ulelements" else "libraryReferences";val array=scene.optJSONArray(key)?:JSONArray().also{scene.put(key,it)};for(i in 0 until array.length())if(array.optJSONObject(i)?.optString("path")==path)return;array.put(JSONObject().put("path",path).put("type",type).put("addedAt",System.currentTimeMillis()));writeScene(scene)}
     fun autosave(){if(!dirty)return;val auto=File(sessionDir,"autosave").apply{mkdirs()};File(sessionDir,"scene.json").takeIf{it.isFile}?.copyTo(File(auto,"scene.json"),true);File(sessionDir,"project.json").takeIf{it.isFile}?.copyTo(File(auto,"project.json"),true);File(auto,"autosave.json").writeText(JSONObject().put("projectUid",info.uid).put("savedAt",System.currentTimeMillis()).toString())}
     fun save(){
         val projectJson=File(sessionDir,"project.json");require(projectJson.isFile);val sceneFile=File(sessionDir,"scene.json").apply{if(!isFile)writeText(defaultScene().toString(2))};val payload=linkedMapOf<String,File>()

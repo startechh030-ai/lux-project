@@ -300,3 +300,18 @@ Home is now a dense project-library workspace inspired by Unreal/Unity hubs: nar
 - Added session locks, scene state, dirty tracking, camera-state serialization, transactional ULX save/backup replacement, autosave-on-background, and interrupted-session recovery.
 - Editor Back now exits immediately when clean or offers Cancel, Discard, and Save & Exit when dirty.
 - Temporary Save button shows a dirty indicator and writes the session safely back into ULX.
+
+## Phase 4B Multi-asset Scene Manager — 0.32.0
+
+- Added a gltfio scene manager that owns multiple Filament Assets inside ModelViewer's shared Engine/Scene.
+- Supports GLB buffers and converted JSON glTF folders with external BIN/texture resource resolution, progressive loading, per-instance visibility/lock/name, removal, and native cleanup.
+- Project scene instances serialize to `scene.json` and restore from ULX sessions without replacing existing models.
+- Temporary Add Model and Remove Last controls allow multi-asset testing before Phase 5 UI.
+
+## Phase 4C Browser-to-Editor actions — 0.33.0
+
+- Resource selection is now read-only until an explicit Inspector action is pressed.
+- Assets expose Add to Scene and load converted JSON glTF through the multi-asset manager.
+- Texture/Animation/Library resources and Ulelements expose Add to Project and persist deduplicated references in scene state.
+- Project cards expose Open Project with clean switching or a custom Cancel/Discard/Save & Open dirty-session flow.
+- Browser callbacks are connected only in the editor; full-screen Hub browsing remains non-destructive.
