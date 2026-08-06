@@ -6,7 +6,7 @@ import kotlin.math.max
 
 /** Uniformly scales, horizontally centers, and rests an imported asset on y=0. */
 object ModelPlacement {
-    data class Result(val centerY: Float, val scale: Float)
+    data class Result(val centerY: Float, val scale: Float, val worldCenter: FloatArray, val worldHalfExtent: FloatArray)
 
     fun placeOnGround(engine: Engine, asset: FilamentAsset, centerZ: Float = -4f): Result {
         val bounds=asset.boundingBox
@@ -25,6 +25,7 @@ object ModelPlacement {
         )
         val tm=engine.transformManager
         tm.setTransform(tm.getInstance(asset.root),matrix)
-        return Result(half[1]*scale,scale)
+        val scaledHalf=floatArrayOf(half[0]*scale,half[1]*scale,half[2]*scale)
+        return Result(scaledHalf[1],scale,floatArrayOf(0f,scaledHalf[1],centerZ),scaledHalf)
     }
 }

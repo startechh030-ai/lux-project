@@ -315,3 +315,9 @@ Home is now a dense project-library workspace inspired by Unreal/Unity hubs: nar
 - Texture/Animation/Library resources and Ulelements expose Add to Project and persist deduplicated references in scene state.
 - Project cards expose Open Project with clean switching or a custom Cancel/Discard/Save & Open dirty-session flow.
 - Browser callbacks are connected only in the editor; full-screen Hub browsing remains non-destructive.
+
+## Phase 4D Selection and Scene Hierarchy — 0.34.0
+
+- Viewport taps use Filament picking to map renderable entities to owning Scene Instance UIDs; empty taps clear selection and drags remain camera gestures.
+- Added ice-blue 3D selection bounds, lock/visibility-aware selection, selection persistence, and stale-entity cleanup.
+- Temporary Scene modal supports select, show/hide, lock/unlock, friendly rename, and delete with dirty-state integration.

@@ -10,6 +10,8 @@ import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.OpenableColumns
 import android.view.Choreographer
 import android.view.Gravity
@@ -41,6 +43,8 @@ class EditorActivity : AppCompatActivity(), Choreographer.FrameCallback {
     private lateinit var manipulator: Manipulator
     private lateinit var editorGrid: EditorGrid
     private lateinit var sceneManager: EditorSceneManager
+    private lateinit var selectionBounds: SelectionBoundsRenderer
+    private val mainHandler=Handler(Looper.getMainLooper())
     private lateinit var status: TextView
     private lateinit var saveButton: TextView
     private lateinit var resourceBrowserPanel: FloatingResourceBrowserPanel
@@ -75,6 +79,7 @@ class EditorActivity : AppCompatActivity(), Choreographer.FrameCallback {
         // SurfaceView. This avoids device-specific SurfaceView touch failures.
         cameraInput = CameraInputView(this).apply {
             onGesture = { gesture -> status.text = "CAMERA INPUT  •  $gesture"; projectSession?.markDirty();if(::saveButton.isInitialized)saveButton.text="Save •" }
+            onTap = { x,y -> pickScene(x,y) }
             onDoubleTap = { resetCameraHome() }
         }
         root.addView(cameraInput, FrameLayout.LayoutParams(-1, -1))
@@ -94,6 +99,8 @@ class EditorActivity : AppCompatActivity(), Choreographer.FrameCallback {
         root.addView(addModel,FrameLayout.LayoutParams(dp(78),dp(36),Gravity.TOP or Gravity.START).apply{leftMargin=dp(10);topMargin=dp(70)})
         val removeModel=TextView(this).apply{text="− Last";textSize=11f;gravity=Gravity.CENTER;setTextColor(Color.WHITE);setBackgroundResource(R.drawable.hub_secondary_button);setOnClickListener{if(::sceneManager.isInitialized&&!sceneManager.removeLast())Toast.makeText(this@EditorActivity,"Scene is empty",Toast.LENGTH_SHORT).show()}}
         root.addView(removeModel,FrameLayout.LayoutParams(dp(78),dp(36),Gravity.TOP or Gravity.START).apply{leftMargin=dp(10);topMargin=dp(110)})
+        val sceneList=TextView(this).apply{text="Scene";textSize=11f;gravity=Gravity.CENTER;setTextColor(Color.WHITE);setBackgroundResource(R.drawable.hub_secondary_button);setOnClickListener{showSceneList()}}
+        root.addView(sceneList,FrameLayout.LayoutParams(dp(78),dp(36),Gravity.TOP or Gravity.START).apply{leftMargin=dp(10);topMargin=dp(150)})
 
         saveButton = TextView(this).apply {
             text = "Save"; textSize = 13f; gravity = Gravity.CENTER; setTextColor(Color.WHITE)
@@ -155,7 +162,8 @@ class EditorActivity : AppCompatActivity(), Choreographer.FrameCallback {
             readAsset("materials/luxe_grid.filamat"),
             readAsset("materials/luxe_lines.filamat")
         )
-        sceneManager = EditorSceneManager(viewer.engine,viewer.scene){if(!suppressSceneDirty){projectSession?.markDirty();if(::saveButton.isInitialized)saveButton.text="Save •"}}
+        selectionBounds=SelectionBoundsRenderer(viewer.engine,viewer.scene,readAsset("materials/luxe_lines.filamat"))
+        sceneManager = EditorSceneManager(viewer.engine,viewer.scene,{if(!suppressSceneDirty){projectSession?.markDirty();if(::saveButton.isInitialized)saveButton.text="Save •"}},{record->if(record==null)selectionBounds.clear()else selectionBounds.show(record.worldCenter,record.worldHalfExtent)})
         cameraInput.inputEnabled = true
 
         intent.getStringExtra(EXTRA_PROJECT_PATH)?.let { openProjectSession(it) }
@@ -181,6 +189,15 @@ class EditorActivity : AppCompatActivity(), Choreographer.FrameCallback {
         val bytes = assets.open(path).use { it.readBytes() }
         return ByteBuffer.allocateDirect(bytes.size).order(ByteOrder.nativeOrder()).apply { put(bytes); flip() }
     }
+
+    private fun pickScene(x:Float,y:Float){if(!::viewer.isInitialized||!::sceneManager.isInitialized)return;viewer.view.pick(x.toInt(),surface.height-y.toInt(),mainHandler){result->if(result.renderable==0)sceneManager.clearSelection()else sceneManager.selectByEntity(result.renderable)}}
+    private fun sceneControl(label:String,action:()->Unit)=TextView(this).apply{text=label;gravity=Gravity.CENTER;textSize=11f;setTextColor(0xffd5dbe4.toInt());setBackgroundResource(R.drawable.hub_secondary_button);setOnClickListener{action()}}
+    private fun showSceneList(){
+        val dialog=Dialog(this);dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);val panel=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(16),dp(12),dp(16),dp(12));setBackgroundResource(R.drawable.hub_dialog_bg)}
+        val heading=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL};heading.addView(TextView(this).apply{text="SCENE  •  ${sceneManager.size} objects";textSize=16f;setTextColor(Color.WHITE);setTypeface(typeface,1)},LinearLayout.LayoutParams(0,dp(38),1f));heading.addView(TextView(this).apply{text="Close";gravity=Gravity.CENTER;setTextColor(Color.WHITE);setBackgroundResource(R.drawable.hub_secondary_button);setOnClickListener{dialog.dismiss()}},LinearLayout.LayoutParams(dp(80),dp(34)));panel.addView(heading)
+        val list=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL};sceneManager.all().forEach{record->val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(dp(8),dp(5),dp(8),dp(5));setBackgroundResource(if(sceneManager.selection==record.uid)R.drawable.hub_nav_selected else R.drawable.hub_project_row)};row.addView(TextView(this).apply{text=record.name;textSize=12f;setTextColor(Color.WHITE);setOnClickListener{sceneManager.select(record.uid);dialog.dismiss();showSceneList()}},LinearLayout.LayoutParams(0,dp(38),1f));row.addView(sceneControl(if(record.visible)"Hide" else "Show",{sceneManager.setVisible(record.uid,!record.visible);dialog.dismiss();showSceneList()}),LinearLayout.LayoutParams(dp(58),dp(32)));row.addView(sceneControl(if(record.locked)"Unlock" else "Lock",{sceneManager.setLocked(record.uid,!record.locked);dialog.dismiss();showSceneList()}),LinearLayout.LayoutParams(dp(62),dp(32)).apply{leftMargin=dp(4)});row.addView(sceneControl("Rename",{dialog.dismiss();showRenameInstance(record.uid,record.name)}),LinearLayout.LayoutParams(dp(68),dp(32)).apply{leftMargin=dp(4)});row.addView(sceneControl("Delete",{sceneManager.remove(record.uid);dialog.dismiss();showSceneList()}),LinearLayout.LayoutParams(dp(60),dp(32)).apply{leftMargin=dp(4)});list.addView(row,LinearLayout.LayoutParams(-1,dp(48)).apply{bottomMargin=dp(4)})};if(sceneManager.size==0)list.addView(TextView(this).apply{text="Scene is empty";gravity=Gravity.CENTER;textSize=13f;setTextColor(0xff777777.toInt())},LinearLayout.LayoutParams(-1,dp(80)));panel.addView(ScrollView(this).apply{addView(list)},LinearLayout.LayoutParams(-1,0,1f));dialog.setContentView(panel);dialog.show();dialog.window?.apply{setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT));setLayout((resources.displayMetrics.widthPixels*.72f).toInt(),(resources.displayMetrics.heightPixels*.72f).toInt())}
+    }
+    private fun showRenameInstance(uid:String,current:String){val dialog=Dialog(this);dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);val panel=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(16),dp(14),dp(16),dp(14));setBackgroundResource(R.drawable.hub_dialog_bg)};val input=android.widget.EditText(this).apply{setText(current);setSingleLine(true);setTextColor(Color.WHITE);background=getDrawable(R.drawable.hub_field_bg)};panel.addView(TextView(this).apply{text="Rename Scene Object";textSize=16f;setTextColor(Color.WHITE)},LinearLayout.LayoutParams(-1,dp(36)));panel.addView(input,LinearLayout.LayoutParams(-1,dp(42)));val save=TextView(this).apply{text="Save";gravity=Gravity.CENTER;setTextColor(Color.WHITE);setBackgroundResource(R.drawable.hub_primary_button);setOnClickListener{val name=input.text.toString().trim();if(name.isNotBlank()){sceneManager.rename(uid,name);dialog.dismiss();showSceneList()}}};panel.addView(save,LinearLayout.LayoutParams(-1,dp(38)).apply{topMargin=dp(8)});dialog.setContentView(panel);dialog.show();dialog.window?.apply{setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT));setLayout((resources.displayMetrics.widthPixels*.42f).toInt(),ViewGroup.LayoutParams.WRAP_CONTENT)}}
 
     private fun addAssetFromBrowser(path:String){
         val folder=File(path);runCatching{val validation=ResourceValidation.asset(folder);require(validation.status!="Invalid"){validation.messages.joinToString("; ")};sceneManager.addGltf(folder,folder.name);resourceBrowserPanel.hidePanel();Toast.makeText(this,"Asset added to scene",Toast.LENGTH_SHORT).show()}.onFailure{Toast.makeText(this,it.message?:"Unable to add asset",Toast.LENGTH_LONG).show()}
@@ -222,18 +239,19 @@ class EditorActivity : AppCompatActivity(), Choreographer.FrameCallback {
     }
     private fun loadSessionModel(file:File?){file?.takeIf{it.isFile}?.let{loadGlb(Uri.fromFile(it),false,"instance-main")}}
     private fun restoreSessionScene(manager:ProjectSessionManager,fallback:File?){
-        val instances=manager.scene().optJSONArray("instances");if(instances==null||instances.length()==0){loadSessionModel(fallback);return}
+        val sceneState=manager.scene();val instances=sceneState.optJSONArray("instances");if(instances==null||instances.length()==0){loadSessionModel(fallback);return}
+        val savedSelection=sceneState.optString("selection").takeIf{it.isNotBlank()&&it!="null"}
         suppressSceneDirty=true
         try{for(i in 0 until instances.length()){
             val item=instances.optJSONObject(i)?:continue;val uid=item.optString("instanceUid").ifBlank{"instance-$i"};val name=item.optString("name","Model ${i+1}");val source=item.optString("source");val file=File(source).takeIf{it.isAbsolute}?:File(manager.sessionDir,source)
             runCatching{if(file.isDirectory&&File(file,"model.gltf").isFile)sceneManager.addGltf(file,name,uid)else if(file.isFile)loadGlb(Uri.fromFile(file),false,uid)}
             sceneManager.setVisible(uid,item.optBoolean("visible",true));sceneManager.setLocked(uid,item.optBoolean("locked",false))
-        }}finally{suppressSceneDirty=false;saveButton.text="Save"}
+        };savedSelection?.let{sceneManager.select(it)}}finally{suppressSceneDirty=false;saveButton.text="Save"}
     }
     private fun captureSceneState():org.json.JSONObject{
         val scene=projectSession?.scene()?:org.json.JSONObject();val eye=DoubleArray(3);val target=DoubleArray(3);val up=DoubleArray(3)
         if(::manipulator.isInitialized){manipulator.getLookAt(eye,target,up);scene.put("camera",org.json.JSONObject().put("eye",org.json.JSONArray(eye.toList())).put("target",org.json.JSONArray(target.toList())).put("up",org.json.JSONArray(up.toList())))}
-        if(::sceneManager.isInitialized)scene.put("instances",sceneManager.serialize())
+        if(::sceneManager.isInitialized){scene.put("instances",sceneManager.serialize());scene.put("selection",sceneManager.selection?:org.json.JSONObject.NULL)}
         scene.put("modifiedAt",System.currentTimeMillis());return scene
     }
     private fun saveProject(exitAfter:Boolean){val manager=projectSession;if(manager==null){Toast.makeText(this,"No ULX project session is open",Toast.LENGTH_SHORT).show();return};runCatching{manager.writeScene(captureSceneState());manager.save()}.onSuccess{saveButton.text="Save";Toast.makeText(this,"Project saved",Toast.LENGTH_SHORT).show();if(exitAfter){manager.closeClean();finish()}}.onFailure{Toast.makeText(this,it.message?:"Project save failed",Toast.LENGTH_LONG).show()}}
@@ -374,7 +392,7 @@ class EditorActivity : AppCompatActivity(), Choreographer.FrameCallback {
 
     override fun onResume() { super.onResume(); applyImmersiveMode(); rendering = true; Choreographer.getInstance().postFrameCallback(this) }
     override fun onPause() { projectSession?.takeIf{it.dirty}?.let{runCatching{it.writeScene(captureSceneState());it.autosave()}};rendering = false; Choreographer.getInstance().removeFrameCallback(this); super.onPause() }
-    override fun onDestroy(){if(::sceneManager.isInitialized)runCatching{sceneManager.destroy()};super.onDestroy()}
+    override fun onDestroy(){if(::sceneManager.isInitialized)runCatching{sceneManager.destroy()};if(::selectionBounds.isInitialized)runCatching{selectionBounds.destroy()};super.onDestroy()}
     override fun doFrame(frameTimeNanos: Long) {
         if (!rendering) return
         if(::sceneManager.isInitialized)sceneManager.update()
