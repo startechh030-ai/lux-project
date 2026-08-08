@@ -321,3 +321,10 @@ Home is now a dense project-library workspace inspired by Unreal/Unity hubs: nar
 - Viewport taps use Filament picking to map renderable entities to owning Scene Instance UIDs; empty taps clear selection and drags remain camera gestures.
 - Added ice-blue 3D selection bounds, lock/visibility-aware selection, selection persistence, and stale-entity cleanup.
 - Temporary Scene modal supports select, show/hide, lock/unlock, friendly rename, and delete with dirty-state integration.
+
+## Phase 4E Transform Foundation — 0.35.0
+
+- Scene records now own persisted position, quaternion rotation, and non-uniform scale composed over the model's grounded normalization transform.
+- Temporary Transform dialog provides numeric position/rotation/scale, Apply, Reset, Ground, and Duplicate actions for the selected unlocked instance.
+- Selection bounds update after transforms; transformed bounds account for rotation and scale.
+- Scene serialization/restoration preserves transforms, and duplicated models reuse project-local or Asset sources without copying shared resources.
