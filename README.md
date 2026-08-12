@@ -1,8 +1,10 @@
-# Luxe Texture3D — Viewport Foundation
+# Luxe Texture3D — Mobile 3D Creation App
 
 Package: `luxe.texture3d.app`
 
-Luxe Texture3D is an Android texture-editing project. This build establishes a clean mobile 3D viewport inspired broadly by Prisma3D, Godot, ArmorPaint, and other touch-first editors.
+Luxe Texture3D is a simplified, touch-first 3D creation application for Android. Its goal is to provide an approachable but capable mobile workspace for geometry editing, texturing, animation, scene creation, lighting, rendering, and related 3D workflows—without reproducing the full complexity of a desktop DCC.
+
+The interface and workflow draw broad inspiration from Blender, Prisma3D, Godot, Maya, Substance Painter, ArmorPaint, Unity, Unreal Engine, and other professional creative tools while maintaining Luxe's own mobile-focused design.
 
 ## Platform
 
@@ -45,9 +47,16 @@ Imported models are:
 - Import size is limited according to Android app memory class.
 - Incomplete files and allocation failures show user-readable errors.
 
-## UI direction
+## Product and UI direction
 
-The viewport remains uncluttered until tools are functional. Selection gizmos, contextual toolbars, free-look joystick, multi-model hierarchy, and painting controls are later milestones.
+Luxe is no longer scoped only as a texturing app. It is a simplified mobile 3D creation app covering geometry editing, texturing, animation, scene setup, lighting, rendering, and future supporting workflows.
+
+The editor will provide two coordinated interface modes:
+
+- **Simple UI:** a streamlined, button-oriented workspace for fast and approachable editing.
+- **Full UI:** a denser, well-organized professional workspace—similar in capability density to a compact mobile Blender-style interface, but designed specifically for touch and for Luxe workflows.
+
+Phase 5 builds both responsive interfaces with mock or placeholder data only. Existing rendering, scene, selection, transform, import, and project systems will not be connected to the new UI during this phase. Engine-to-UI integration will happen later in Phase 6.
 
 ## Build
 
@@ -328,3 +337,11 @@ Home is now a dense project-library workspace inspired by Unreal/Unity hubs: nar
 - Temporary Transform dialog provides numeric position/rotation/scale, Apply, Reset, Ground, and Duplicate actions for the selected unlocked instance.
 - Selection bounds update after transforms; transformed bounds account for rotation and scale.
 - Scene serialization/restoration preserves transforms, and duplicated models reuse project-local or Asset sources without copying shared resources.
+
+## Phase 5 top and left editor shell — 0.36.0
+
+- Added the approved responsive Full UI top navigation and eight-position left tool rail.
+- Added Edit Preview/Matcap indicators and workspace-specific mock contextual controls.
+- File opens the existing Resource Browser; long-press File invokes project Save.
+- Mesh editing controls remain clearly identified placeholders until the Phase 6 MeshLibs engine.
+- Existing Phase 4 testing controls remain available behind a temporary DEV toggle.

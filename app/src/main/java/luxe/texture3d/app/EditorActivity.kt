@@ -85,6 +85,8 @@ class EditorActivity : AppCompatActivity(), Choreographer.FrameCallback {
         }
         root.addView(cameraInput, FrameLayout.LayoutParams(-1, -1))
 
+        val developerControls = mutableListOf<View>()
+        var developerControlsVisible = false
         val open = ImageButton(this).apply {
             setImageResource(luxe.texture3d.app.R.drawable.ic_open)
             contentDescription = "Open GLB model"
@@ -96,6 +98,7 @@ class EditorActivity : AppCompatActivity(), Choreographer.FrameCallback {
         root.addView(open, FrameLayout.LayoutParams(dp(52), dp(52), Gravity.TOP or Gravity.START).apply {
             leftMargin = dp(10); topMargin = dp(10)
         })
+        developerControls += open
         val addModel=TextView(this).apply{text="+ Model";textSize=11f;gravity=Gravity.CENTER;setTextColor(Color.WHITE);setBackgroundResource(R.drawable.hub_secondary_button);setOnClickListener{openModel.launch(arrayOf("model/gltf-binary","application/octet-stream","*/*"))}}
         root.addView(addModel,FrameLayout.LayoutParams(dp(78),dp(36),Gravity.TOP or Gravity.START).apply{leftMargin=dp(10);topMargin=dp(70)})
         val removeModel=TextView(this).apply{text="− Last";textSize=11f;gravity=Gravity.CENTER;setTextColor(Color.WHITE);setBackgroundResource(R.drawable.hub_secondary_button);setOnClickListener{if(::sceneManager.isInitialized&&!sceneManager.removeLast())Toast.makeText(this@EditorActivity,"Scene is empty",Toast.LENGTH_SHORT).show()}}
@@ -104,6 +107,7 @@ class EditorActivity : AppCompatActivity(), Choreographer.FrameCallback {
         root.addView(sceneList,FrameLayout.LayoutParams(dp(78),dp(36),Gravity.TOP or Gravity.START).apply{leftMargin=dp(10);topMargin=dp(150)})
         val transformButton=TextView(this).apply{text="Transform";textSize=11f;gravity=Gravity.CENTER;setTextColor(Color.WHITE);setBackgroundResource(R.drawable.hub_secondary_button);setOnClickListener{showTransformDialog()}}
         root.addView(transformButton,FrameLayout.LayoutParams(dp(78),dp(36),Gravity.TOP or Gravity.START).apply{leftMargin=dp(10);topMargin=dp(190)})
+        developerControls += listOf(addModel, removeModel, sceneList, transformButton)
 
         saveButton = TextView(this).apply {
             text = "Save"; textSize = 13f; gravity = Gravity.CENTER; setTextColor(Color.WHITE)
@@ -124,6 +128,8 @@ class EditorActivity : AppCompatActivity(), Choreographer.FrameCallback {
         root.addView(settings, FrameLayout.LayoutParams(dp(50), dp(50), Gravity.BOTTOM or Gravity.START).apply {
             leftMargin = dp(11); bottomMargin = dp(12)
         })
+        developerControls += listOf(saveButton, settings)
+        developerControls.forEach { it.visibility = View.GONE }
 
 
         status = TextView(this).apply {
@@ -134,6 +140,17 @@ class EditorActivity : AppCompatActivity(), Choreographer.FrameCallback {
         }
         status.alpha = 0f
         root.addView(status, FrameLayout.LayoutParams(1, 1, Gravity.BOTTOM))
+        val editorChrome = EditorChromeView(
+            this,
+            onFiles = { resourceBrowserPanel.togglePanel() },
+            onSave = { saveProject(false) },
+            onDeveloperTools = {
+                developerControlsVisible = !developerControlsVisible
+                developerControls.forEach { it.visibility = if (developerControlsVisible) View.VISIBLE else View.GONE }
+                Toast.makeText(this, if (developerControlsVisible) "Phase 4 developer controls shown" else "Developer controls hidden", Toast.LENGTH_SHORT).show()
+            }
+        )
+        root.addView(editorChrome, FrameLayout.LayoutParams(-1, -1))
         resourceBrowserPanel = FloatingResourceBrowserPanel(this,object:ResourceBrowserActions{
             override fun onAddToScene(resourcePath:String)=addAssetFromBrowser(resourcePath)
             override fun onAddToProject(resourcePath:String)=addResourceToProject(resourcePath)
