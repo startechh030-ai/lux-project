@@ -21,6 +21,14 @@
     ".json": {
       "enabled": true,
       "run": "vscode-json-language-server --stdio"
+    },
+    ".md": {
+      "enabled": true,
+      "run": "marksman server"
+    },
+    ".cpp": {
+      "enabled": true,
+      "run": "clangd"
     }
   }
 }

@@ -345,3 +345,11 @@ Home is now a dense project-library workspace inspired by Unreal/Unity hubs: nar
 - File opens the existing Resource Browser; long-press File invokes project Save.
 - Mesh editing controls remain clearly identified placeholders until the Phase 6 MeshLibs engine.
 - Existing Phase 4 testing controls remain available behind a temporary DEV toggle.
+
+## Phase 5 compact WIP editor chrome — 0.36.1
+
+- Renamed the active edit-preview workspace to WIP mode.
+- Replaced temporary text glyphs in the left rail with original Canvas-rendered monochrome tool icons.
+- Compacted the top bar, contextual row, and eight-tool rail while preserving touch targets.
+- Added dropdown indicators to editor tabs and a custom Luxe dropdown surface with placeholder feature data.
+- File dropdown exposes the real Resource Browser and Save actions; no platform AlertDialog is used by the new chrome.

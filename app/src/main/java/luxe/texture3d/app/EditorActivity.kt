@@ -1,7 +1,6 @@
 package luxe.texture3d.app
 
 import androidx.appcompat.app.AppCompatActivity
-import androidx.appcompat.app.AlertDialog
 import androidx.activity.OnBackPressedCallback
 import android.app.ActivityManager
 import android.app.Dialog
