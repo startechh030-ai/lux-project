@@ -353,3 +353,13 @@ Home is now a dense project-library workspace inspired by Unreal/Unity hubs: nar
 - Compacted the top bar, contextual row, and eight-tool rail while preserving touch targets.
 - Added dropdown indicators to editor tabs and a custom Luxe dropdown surface with placeholder feature data.
 - File dropdown exposes the real Resource Browser and Save actions; no platform AlertDialog is used by the new chrome.
+
+## Phase 5 context-aware WIP editor structure — 0.37.0
+
+- Replaced the discarded single-row tab concept with an approved two-row professional editor header.
+- The first row separates global menus from Modeling, Sculpt, T/V, UVs, Animation, and Nodes workspaces.
+- The second row communicates WIP mode, object context, component selection, operations, active Bevel tool, and mock tool parameters.
+- Rebuilt the left toolbar as one compact, vertically scrollable icon column containing the core tool placeholders.
+- Added unobtrusive viewport context text and a thin interaction/statistics status strip.
+- The right side intentionally has no panel; logic controls arrive with the MeshLibs implementation.
+- All editing values and operations remain UI-only placeholders. Existing File browser and Save callbacks remain available.

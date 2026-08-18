@@ -9,16 +9,16 @@ import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
-import android.view.MotionEvent
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import kotlin.math.min
 
-/** Phase 5 WIP workspace chrome. Mesh controls remain placeholders until MeshLibs. */
+/** Phase 5 context-aware WIP editor structure. No MeshLibs operations are connected. */
 class EditorChromeView(
     context: Context,
     private val onFiles: () -> Unit,
@@ -30,157 +30,91 @@ class EditorChromeView(
     private val blue = 0xff79bfe8.toInt()
     private val text = 0xffd5dae0.toInt()
     private val muted = 0xff8b949d.toInt()
-    private var activeTab = "Edit"
-    private var activeTool = 0
-    private val tabViews = linkedMapOf<String, TextView>()
-    private val contextRow = LinearLayout(context)
-    private val rail = LinearLayout(context)
-    private val dropdown = LinearLayout(context)
+    private val menu = LinearLayout(context)
+    private val contextBar = LinearLayout(context)
+    private var activeWorkspace = "Modeling"
+    private var component = "Face"
+    private var activeTool = 1
+    private val workspaceViews = linkedMapOf<String, TextView>()
 
     init {
         clipChildren = false
-        addView(buildTopBar(), LayoutParams(-1, px(42), Gravity.TOP))
-
-        contextRow.orientation = LinearLayout.HORIZONTAL
-        contextRow.gravity = Gravity.CENTER_VERTICAL
-        contextRow.setPadding(px(8), 0, px(6), 0)
-        contextRow.background = bg(0xf015181b.toInt(), 0xff30363c.toInt(), 0)
-        addView(contextRow, LayoutParams(px(720), px(38), Gravity.TOP or Gravity.START).apply { topMargin = px(42); leftMargin = px(48) })
-
-        rail.orientation = LinearLayout.VERTICAL
-        rail.gravity = Gravity.TOP
-        rail.setPadding(px(4), px(5), px(4), px(4))
-        rail.background = bg(0xf2111416.toInt(), 0xff30363c.toInt(), 0)
-        addView(rail, LayoutParams(px(48), px(430), Gravity.TOP or Gravity.START).apply { topMargin = px(42) })
-
-        dropdown.orientation = LinearLayout.VERTICAL
-        dropdown.setPadding(px(8), px(7), px(8), px(7))
-        dropdown.background = bg(0xff1a1e22.toInt(), 0xff414951.toInt(), 3)
-        dropdown.elevation = px(12).toFloat()
-        dropdown.visibility = GONE
-        addView(dropdown, LayoutParams(px(205), -2, Gravity.TOP or Gravity.START).apply { topMargin = px(40) })
-
-        rebuildContext()
-        rebuildRail()
-        addView(label("DEV", 8f, muted).apply {
-            gravity = Gravity.CENTER
-            background = bg(0xd9181c20.toInt(), 0xff343b42.toInt(), 2)
-            setOnClickListener { onDeveloperTools() }
-        }, LayoutParams(px(40), px(23), Gravity.BOTTOM or Gravity.START).apply { leftMargin = px(4); bottomMargin = px(5) })
+        addView(buildPrimaryHeader(), LayoutParams(-1, px(40), Gravity.TOP))
+        addView(buildContextHeader(), LayoutParams(-1, px(37), Gravity.TOP).apply { topMargin = px(40) })
+        addView(buildToolRail(), LayoutParams(px(47), -1, Gravity.TOP or Gravity.START).apply { topMargin = px(77); bottomMargin = px(25) })
+        addView(buildViewportState(), LayoutParams(px(350), px(48), Gravity.TOP or Gravity.START).apply { leftMargin = px(59); topMargin = px(89) })
+        addView(buildStatusBar(), LayoutParams(-1, px(25), Gravity.BOTTOM))
+        menu.orientation = LinearLayout.VERTICAL
+        menu.setPadding(px(7), px(6), px(7), px(6))
+        menu.background = bg(0xff1a1e22.toInt(), 0xff46515a.toInt(), 2)
+        menu.elevation = px(14).toFloat(); menu.visibility = GONE
+        addView(menu, LayoutParams(px(205), -2, Gravity.TOP or Gravity.START).apply { topMargin = px(38) })
     }
 
-    private fun buildTopBar(): View {
-        val bar = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-            setPadding(px(5), 0, px(7), 0); background = bg(0xff0e1113.toInt(), 0xff30363c.toInt(), 0)
+    private fun buildPrimaryHeader(): View {
+        val row = LinearLayout(context).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER_VERTICAL; setPadding(px(5),0,px(7),0); background=bg(0xff0e1113.toInt(),0xff30363c.toInt(),0) }
+        row.addView(LuxeToolIconView(context, ToolIcon.LOGO, Color.WHITE, false), LinearLayout.LayoutParams(px(36),px(36)))
+        listOf("File","Edit","Render").forEach { name -> row.addView(topItem(name, true), LinearLayout.LayoutParams(-2,px(32))) }
+        row.addView(divider(), LinearLayout.LayoutParams(px(1),px(21)).apply { setMargins(px(7),0,px(7),0) })
+        val workspaces=LinearLayout(context).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER_VERTICAL }
+        listOf("Modeling","Sculpt","T/V","UVs","Animation","Nodes").forEach { name ->
+            val v=topItem(name,false);workspaceViews[name]=v;workspaces.addView(v,LinearLayout.LayoutParams(-2,px(32)))
         }
-        bar.addView(LuxeToolIconView(context, ToolIcon.LOGO, Color.WHITE, false), LinearLayout.LayoutParams(px(38), px(38)))
-        bar.addView(label("WIP", 9f, blue).apply {
-            gravity = Gravity.CENTER; typeface = Typeface.DEFAULT_BOLD
-            background = bg(0xff172a35.toInt(), 0xff315a70.toInt(), 2)
-        }, LinearLayout.LayoutParams(px(42), px(24)).apply { rightMargin = px(5) })
-
-        val tabs = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        listOf("File", "Edit", "Sculpt", "Texturing", "Animation", "Node Graph", "UVs", "Full Rendering", "More").forEach { name ->
-            val tab = label("$name  ▾", 11f, text).apply {
-                gravity = Gravity.CENTER; setPadding(px(10), 0, px(10), 0)
-                setOnClickListener { anchor ->
-                    if (name != "File") { activeTab = name; refreshTabs(); rebuildContext() }
-                    showDropdown(name, anchor)
-                }
-            }
-            tabViews[name] = tab
-            tabs.addView(tab, LinearLayout.LayoutParams(-2, px(34)))
-        }
-        bar.addView(HorizontalScrollView(context).apply { isHorizontalScrollBarEnabled = false; addView(tabs) }, LinearLayout.LayoutParams(0, -1, 1f))
-        bar.addView(label("WIP Preview  ▾", 9.5f, text).apply {
-            gravity = Gravity.CENTER; background = bg(0xff20262b.toInt(), 0xff414a52.toInt(), 2)
-            setOnClickListener { showDropdown("WIP Preview", it) }
-        }, LinearLayout.LayoutParams(px(112), px(27)).apply { rightMargin = px(6) })
-        bar.addView(label("●  Matcap", 9.5f, blue).apply { gravity = Gravity.CENTER_VERTICAL }, LinearLayout.LayoutParams(px(76), -1))
-        refreshTabs()
-        return bar
+        workspaces.addView(topItem("＋",false),LinearLayout.LayoutParams(px(35),px(32)))
+        row.addView(HorizontalScrollView(context).apply { isHorizontalScrollBarEnabled=false;addView(workspaces) },LinearLayout.LayoutParams(0,-1,1f))
+        row.addView(chip("Scene  ▾",false){ showMenu("Scene",it) },LinearLayout.LayoutParams(px(84),px(26)).apply{rightMargin=px(5)})
+        row.addView(chip("◐  ◉  ◌",false){ showMenu("Viewport",it) },LinearLayout.LayoutParams(px(80),px(26)))
+        refreshWorkspaces();return row
     }
 
-    private fun refreshTabs() = tabViews.forEach { (name, view) ->
-        view.setTextColor(if (name == activeTab) Color.WHITE else text)
-        view.background = if (name == activeTab) bg(0xff21323c.toInt(), 0xff4d85a3.toInt(), 2) else null
+    private fun topItem(name:String, global:Boolean)=label(if(global) "$name  ▾" else name,10.5f,text).apply {
+        gravity=Gravity.CENTER;setPadding(px(10),0,px(10),0)
+        setOnClickListener { if(global) showMenu(name,it) else { activeWorkspace=name;refreshWorkspaces();rebuildContext();Toast.makeText(context,"$name workspace preview",Toast.LENGTH_SHORT).show() } }
+    }
+    private fun refreshWorkspaces()=workspaceViews.forEach{(name,v)->v.setTextColor(if(name==activeWorkspace)Color.WHITE else text);v.background=if(name==activeWorkspace)bg(0xff20313b.toInt(),blue,1)else null}
+
+    private fun buildContextHeader(): View {
+        contextBar.orientation=LinearLayout.HORIZONTAL;contextBar.gravity=Gravity.CENTER_VERTICAL;contextBar.setPadding(px(7),0,px(8),0);contextBar.background=bg(0xff171b1e.toInt(),0xff343a40.toInt(),0)
+        rebuildContext();return contextBar
+    }
+    private fun rebuildContext(){
+        contextBar.removeAllViews()
+        contextBar.addView(chip("WIP Mode  ▾",true){showMenu("WIP Mode",it)},LinearLayout.LayoutParams(px(105),px(27)).apply{rightMargin=px(5)})
+        contextBar.addView(chip("Object  ▾",false){showMenu("Object",it)},LinearLayout.LayoutParams(px(82),px(27)).apply{rightMargin=px(5)})
+        listOf("Vertex","Edge","Face").forEach{name->contextBar.addView(chip(name,name==component){component=name;rebuildContext()},LinearLayout.LayoutParams(px(61),px(27)).apply{rightMargin=px(3)})}
+        contextBar.addView(divider(),LinearLayout.LayoutParams(px(1),px(21)).apply{setMargins(px(5),0,px(7),0)})
+        listOf("Select","Add  ▾","Mesh  ▾").forEach{name->contextBar.addView(chip(name,false){showMenu(name.removeSuffix("  ▾"),it)},LinearLayout.LayoutParams(px(70),px(27)).apply{rightMargin=px(3)})}
+        contextBar.addView(divider(),LinearLayout.LayoutParams(px(1),px(21)).apply{setMargins(px(6),0,px(8),0)})
+        contextBar.addView(label("Bevel",10f,blue).apply{gravity=Gravity.CENTER_VERTICAL;typeface=Typeface.DEFAULT_BOLD},LinearLayout.LayoutParams(px(62),-1))
+        listOf("Width  0.08","Segments  3","Clamp  ✓").forEach{name->contextBar.addView(chip(name,false){Toast.makeText(context,"$name — UI-only value",Toast.LENGTH_SHORT).show()},LinearLayout.LayoutParams(px(if(name.startsWith("Segments"))96 else 86),px(25)).apply{rightMargin=px(4)})}
+        contextBar.addView(View(context),LinearLayout.LayoutParams(0,1,1f));contextBar.addView(label("⌁   ◫",15f,text).apply{gravity=Gravity.CENTER},LinearLayout.LayoutParams(px(70),-1))
     }
 
-    private fun showDropdown(section: String, anchor: View) {
-        dropdown.removeAllViews()
-        dropdown.addView(label(section.uppercase(), 9f, blue).apply {
-            typeface = Typeface.DEFAULT_BOLD; gravity = Gravity.CENTER_VERTICAL; setPadding(px(8), 0, 0, 0)
-        }, LinearLayout.LayoutParams(-1, px(27)))
-        val entries = when (section) {
-            "File" -> listOf("Open Resource Browser" to true, "Save Project" to true, "Recent Files" to false, "Import…" to false)
-            "WIP Preview" -> listOf("Matcap" to false, "Skeleton Shading" to false, "Wire Overlay" to false, "Preview Settings" to false)
-            else -> listOf("Workspace options" to false, "Tool presets" to false, "Customize toolbar" to false)
-        }
-        entries.forEach { (name, functional) ->
-            dropdown.addView(label(if (functional) name else "$name   —", 10.5f, if (functional) text else muted).apply {
-                gravity = Gravity.CENTER_VERTICAL; setPadding(px(9), 0, px(6), 0)
-                background = bg(0xff20252a.toInt(), 0x00343b42, 2)
-                setOnClickListener {
-                    dropdown.visibility = GONE
-                    when (name) {
-                        "Open Resource Browser" -> onFiles()
-                        "Save Project" -> onSave()
-                        else -> Toast.makeText(context, "$name is placeholder data", Toast.LENGTH_SHORT).show()
-                    }
-                }
-            }, LinearLayout.LayoutParams(-1, px(31)).apply { topMargin = px(3) })
-        }
-        val at = IntArray(2); anchor.getLocationOnScreen(at)
-        (dropdown.layoutParams as LayoutParams).apply { leftMargin = at[0].coerceAtMost(width - px(215)).coerceAtLeast(0); topMargin = px(40) }
-        dropdown.visibility = VISIBLE
-        dropdown.bringToFront()
+    private fun buildToolRail():View{
+        val column=LinearLayout(context).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.TOP;setPadding(px(3),px(4),px(3),px(4));background=bg(0xf2111416.toInt(),0xff30363c.toInt(),0)}
+        val tools=listOf(ToolIcon.SELECT,ToolIcon.BEVEL,ToolIcon.COMPONENTS,ToolIcon.TRANSFORM,ToolIcon.EXTRUDE,ToolIcon.INSET,ToolIcon.CUT,ToolIcon.MORE)
+        val names=listOf("Select","Bevel","Component Selection","Transform","Extrude","Inset","Cut","More Tools")
+        tools.forEachIndexed{i,icon->column.addView(LuxeToolIconView(context,icon,if(i==activeTool)blue else text,i==activeTool).apply{contentDescription=names[i];setOnClickListener{activeTool=i;Toast.makeText(context,"${names[i]} — structure only",Toast.LENGTH_SHORT).show()}},LinearLayout.LayoutParams(px(40),px(40)).apply{bottomMargin=px(3)})}
+        return ScrollView(context).apply{isVerticalScrollBarEnabled=true;scrollBarStyle=View.SCROLLBARS_INSIDE_OVERLAY;overScrollMode=View.OVER_SCROLL_IF_CONTENT_SCROLLS;addView(column,ScrollView.LayoutParams(-1,-2))}
     }
 
-    private fun rebuildContext() {
-        contextRow.removeAllViews()
-        val items = when (activeTab) {
-            "Edit" -> listOf("Object", "Vertex", "Edge", "Face", "Pivot", "Global", "Snap", "Symmetry")
-            "Sculpt" -> listOf("Draw", "Smooth", "Clay", "Inflate", "Radius", "Strength", "Symmetry")
-            "Texturing" -> listOf("Paint", "Erase", "Fill", "Material", "Channel", "Brush")
-            "Animation" -> listOf("Pose", "Key", "Playback", "Timeline", "Dope Sheet")
-            "Node Graph" -> listOf("Add Node", "Connect", "Frame", "Search")
-            "UVs" -> listOf("Select", "Seam", "Unwrap", "Pack", "Align")
-            "Full Rendering" -> listOf("Camera", "Lighting", "Preview", "Output", "Render")
-            else -> listOf("Workspace", "Options")
-        }
-        items.forEachIndexed { i, name ->
-            contextRow.addView(label(name, 9.5f, if (i == 0) blue else text).apply {
-                gravity = Gravity.CENTER
-                background = bg(if (i == 0) 0xff20323c.toInt() else 0xff202428.toInt(), if (i == 0) 0xff4f8daf.toInt() else 0xff363d43.toInt(), 2)
-                setOnClickListener { Toast.makeText(context, "$name is a UI placeholder", Toast.LENGTH_SHORT).show() }
-            }, LinearLayout.LayoutParams(px(if (name.length > 8) 78 else 62), px(25)).apply { rightMargin = px(4) })
-        }
+    private fun buildViewportState()=LinearLayout(context).apply{
+        orientation=LinearLayout.VERTICAL;setPadding(px(4),0,0,0)
+        addView(label("User Perspective",10f,0xffc8cdd2.toInt()),LinearLayout.LayoutParams(-1,px(21)))
+        addView(label("Building_A  •  $component Selection  •  Bevel",9.5f,muted),LinearLayout.LayoutParams(-1,px(21)))
     }
+    private fun buildStatusBar():View{val row=LinearLayout(context).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(px(9),0,px(9),0);background=bg(0xf50e1113.toInt(),0xff30363c.toInt(),0)};row.addView(label("Select  •  Orbit  •  Pan  •  Zoom",9f,muted),LinearLayout.LayoutParams(0,-1,1f));row.addView(label("Faces 518  •  Tris 27.1K  •  WIP Matcap",9f,muted),LinearLayout.LayoutParams(-2,-1));return row}
 
-    private fun rebuildRail() {
-        rail.removeAllViews()
-        val tools = listOf(ToolIcon.SELECT, ToolIcon.BEVEL, ToolIcon.COMPONENTS, ToolIcon.TRANSFORM, ToolIcon.EXTRUDE, ToolIcon.INSET, ToolIcon.CUT, ToolIcon.MORE)
-        val names = listOf("Select", "Bevel", "Selection Mode", "Transform", "Extrude", "Inset", "Cut", "More Tools")
-        tools.forEachIndexed { index, icon ->
-            rail.addView(LuxeToolIconView(context, icon, if (index == activeTool) blue else text, index == activeTool).apply {
-                contentDescription = names[index]
-                setOnClickListener { activeTool = index; rebuildRail(); Toast.makeText(context, "${names[index]} — MeshLibs placeholder", Toast.LENGTH_SHORT).show() }
-            }, LinearLayout.LayoutParams(px(40), px(40)).apply { bottomMargin = px(4) })
-        }
+    private fun showMenu(section:String,anchor:View){
+        menu.removeAllViews();menu.addView(label(section.uppercase(),9f,blue).apply{typeface=Typeface.DEFAULT_BOLD;gravity=Gravity.CENTER_VERTICAL;setPadding(px(8),0,0,0)},LinearLayout.LayoutParams(-1,px(26)))
+        val entries=when(section){"File"->listOf("Open Resource Browser","Save Project","Recent Files —","Import —");"WIP Mode"->listOf("WIP Mode","Object Mode —","Edit Mode —","Sculpt Mode —");else->listOf("Context options —","Presets —","Customize —")}
+        entries.forEach{name->menu.addView(label(name,10f,if(name.endsWith("—"))muted else text).apply{gravity=Gravity.CENTER_VERTICAL;setPadding(px(9),0,px(6),0);background=bg(0xff20252a.toInt(),0x00343b42,2);setOnClickListener{menu.visibility=GONE;when(name){"Open Resource Browser"->onFiles();"Save Project"->onSave();else->Toast.makeText(context,"$name placeholder",Toast.LENGTH_SHORT).show()}}},LinearLayout.LayoutParams(-1,px(30)).apply{topMargin=px(3)})}
+        val pos=IntArray(2);anchor.getLocationOnScreen(pos);(menu.layoutParams as LayoutParams).leftMargin=pos[0].coerceAtMost(width-px(212)).coerceAtLeast(0);menu.visibility=VISIBLE;menu.bringToFront()
     }
-
-    override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (dropdown.visibility == VISIBLE && event.action == MotionEvent.ACTION_DOWN) { dropdown.visibility = GONE; return true }
-        return false
-    }
-
-    private fun label(value: String, size: Float, color: Int) = TextView(context).apply {
-        text = value; textSize = size * scale.coerceAtMost(1.15f); setTextColor(color); includeFontPadding = false; maxLines = 1
-    }
-    private fun bg(fill: Int, stroke: Int, radius: Int) = GradientDrawable().apply {
-        shape = GradientDrawable.RECTANGLE; setColor(fill); if (stroke ushr 24 != 0) setStroke(px(1), stroke); cornerRadius = px(radius).toFloat()
-    }
+    private fun chip(value:String,active:Boolean,click:(View)->Unit)=label(value,9.5f,if(active)blue else text).apply{gravity=Gravity.CENTER;background=bg(if(active)0xff20323c.toInt() else 0xff202428.toInt(),if(active)0xff4f8daf.toInt() else 0xff363d43.toInt(),2);setOnClickListener{click(it)}}
+    private fun divider()=View(context).apply{setBackgroundColor(0xff394047.toInt())}
+    private fun label(value:String,size:Float,color:Int)=TextView(context).apply{text=value;textSize=size*scale.coerceAtMost(1.15f);setTextColor(color);includeFontPadding=false;maxLines=1}
+    private fun bg(fill:Int,stroke:Int,radius:Int)=GradientDrawable().apply{shape=GradientDrawable.RECTANGLE;setColor(fill);if(stroke ushr 24!=0)setStroke(px(1),stroke);cornerRadius=px(radius).toFloat()}
 }
 
 private enum class ToolIcon { LOGO, SELECT, BEVEL, COMPONENTS, TRANSFORM, EXTRUDE, INSET, CUT, MORE }
