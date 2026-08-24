@@ -35,3 +35,7 @@ No MeshLibs geometry operation is implemented or connected in this version. The 
 - Original Canvas vector icons replace provisional text symbols.
 - Top tabs and preview selector use custom Luxe dropdown panels.
 - Unimplemented dropdown entries remain visibly muted placeholder data.
+
+## Approved context-aware redesign — 0.37.0
+
+The 0.36.x header structure was discarded. The replacement uses two context-aware header rows, one vertically scrollable left tool column, viewport operation feedback, and a thin status bar. No right dock is created before MeshLibs controls are defined.

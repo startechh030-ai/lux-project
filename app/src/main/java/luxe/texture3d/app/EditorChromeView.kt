@@ -95,7 +95,7 @@ class EditorChromeView(
         val tools=listOf(ToolIcon.SELECT,ToolIcon.BEVEL,ToolIcon.COMPONENTS,ToolIcon.TRANSFORM,ToolIcon.EXTRUDE,ToolIcon.INSET,ToolIcon.CUT,ToolIcon.MORE)
         val names=listOf("Select","Bevel","Component Selection","Transform","Extrude","Inset","Cut","More Tools")
         tools.forEachIndexed{i,icon->column.addView(LuxeToolIconView(context,icon,if(i==activeTool)blue else text,i==activeTool).apply{contentDescription=names[i];setOnClickListener{activeTool=i;Toast.makeText(context,"${names[i]} — structure only",Toast.LENGTH_SHORT).show()}},LinearLayout.LayoutParams(px(40),px(40)).apply{bottomMargin=px(3)})}
-        return ScrollView(context).apply{isVerticalScrollBarEnabled=true;scrollBarStyle=View.SCROLLBARS_INSIDE_OVERLAY;overScrollMode=View.OVER_SCROLL_IF_CONTENT_SCROLLS;addView(column,ScrollView.LayoutParams(-1,-2))}
+        return ScrollView(context).apply{isVerticalScrollBarEnabled=true;scrollBarStyle=View.SCROLLBARS_INSIDE_OVERLAY;overScrollMode=View.OVER_SCROLL_IF_CONTENT_SCROLLS;addView(column,FrameLayout.LayoutParams(-1,-2))}
     }
 
     private fun buildViewportState()=LinearLayout(context).apply{

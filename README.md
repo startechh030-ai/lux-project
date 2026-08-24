@@ -363,3 +363,7 @@ Home is now a dense project-library workspace inspired by Unreal/Unity hubs: nar
 - Added unobtrusive viewport context text and a thin interaction/statistics status strip.
 - The right side intentionally has no panel; logic controls arrive with the MeshLibs implementation.
 - All editing values and operations remain UI-only placeholders. Existing File browser and Save callbacks remain available.
+
+## Phase 5 WIP chrome build fix — 0.37.1
+
+- Corrected the left toolbar ScrollView child layout parameter type that prevented Kotlin release compilation.
