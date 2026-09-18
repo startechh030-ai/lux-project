@@ -367,3 +367,42 @@ Home is now a dense project-library workspace inspired by Unreal/Unity hubs: nar
 ## Phase 5 WIP chrome build fix — 0.37.1
 
 - Corrected the left toolbar ScrollView child layout parameter type that prevented Kotlin release compilation.
+
+## Phase 6 Edit-mode mesh engine — 0.38.0
+
+Luxe previously had no path to geometry editing. `EditorSceneManager.begin()` calls
+`asset.releaseSourceData()`, so geometry lived only in Filament GPU buffers, and
+`View.pick()` resolves a tap to a whole renderable rather than a face, edge, or vertex.
+Edit mode needed a host-side mesh, a way to load geometry into it, and a way to push edits
+back to the GPU.
+
+- Added `EditMesh`: a CPU-side editable triangle mesh backed by flat `FloatArray` / `IntArray`
+  buffers rather than per-vertex objects, so it stays within a phone's memory budget.
+- Added `MeshTopology`: half-edge adjacency stored as CSR int arrays. Edges may carry any
+  number of incident faces, so non-manifold imports degrade gracefully instead of failing,
+  and `nonManifoldEdges()` lets the UI warn.
+- Added `MeshSelection`: vertex, edge, and face selection with Blender-style conversion when
+  switching element modes. Boundary edges of a face region are exposed for extrude and inset.
+- Added `MeshOperators`: subdivide (linear 1-to-4 and Loop with Warren's weights plus a
+  boundary rule), extrude (region and individual), inset, delete faces/edges/vertices, weld,
+  and compact. Every operator returns a new mesh and leaves its input untouched.
+- Added `MeshRaycast`: Möller-Trumbore face picking plus angular vertex and edge picking,
+  and a screen-to-world ray built from the camera basis that `Manipulator.getLookAt()` already
+  provides.
+- Added `MeshHistory`: undo/redo as reference swaps over mesh and selection snapshots.
+- Added `GltfMeshLoader`: reads actual glTF accessor bytes for the first time. Handles JSON
+  glTF folders and GLB containers, external buffers, `data:` URIs, interleaved accessors,
+  all glTF component types, triangle strips and fans, and node hierarchies. Buffers are read
+  through a seekable source so a large `.bin` is never fully loaded.
+- Added `EditableMeshRenderer`: rebuilds Filament vertex and index buffers after each edit and
+  draws the wireframe and selection overlay as lines using the existing `luxe_lines.filamat`.
+- Added `EditModeController`: owns Edit mode for one scene instance — CPU mesh, topology,
+  selection, history, picking, and the GPU round trip.
+- Added `app/src/test/java/luxe/texture3d/verification/MeshKernelTest.kt`, a standalone JVM
+  harness of 157 checks covering Euler characteristic, winding consistency, analytic Loop
+  positions, area preservation, picking round trips, and history isolation. It runs with
+  `kotlinc` alone, with no Android test runner.
+
+MeshLab itself is not embeddable on Android and VCGlib, its kernel, is GPL — linking it would
+force the whole app to be GPL. The operators were therefore written from scratch. See
+`PHASE6_PLAN.md` for the reasoning and for the remaining UI wiring steps.
