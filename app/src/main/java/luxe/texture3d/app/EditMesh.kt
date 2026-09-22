@@ -481,6 +481,14 @@ class MeshBuilder(initialVertices: Int = 256, initialFaces: Int = 256) {
 
     fun addVertex(p: FloatArray): Int = addVertex(p[0], p[1], p[2])
 
+    /** Position of vertex [i], for operators that need to detect coincident vertices. */
+    fun positionOf(i: Int, out: FloatArray = FloatArray(3)): FloatArray {
+        out[0] = pos[i * 3]
+        out[1] = pos[i * 3 + 1]
+        out[2] = pos[i * 3 + 2]
+        return out
+    }
+
     fun addTriangle(a: Int, b: Int, c: Int) {
         if ((faceCount + 1) * 3 > idx.size) {
             idx = idx.copyOf(((faceCount + 1) * 3 * 2).coerceAtLeast(idx.size * 2))

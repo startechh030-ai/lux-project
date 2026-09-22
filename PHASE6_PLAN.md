@@ -1,6 +1,11 @@
 # Phase 6 — Edit Mode Mesh Engine
 
-**Target version:** 0.38.0 · **Status:** kernel complete and verified · **UI wiring:** next step
+**Target version:** 0.39.0 · **Status:** kernel + modelling tools complete and verified (283 checks) · **UI wiring:** the remaining step
+
+> The modelling tools (loop cut, knife, bevel, mesh relab, move/rotate/scale, mirror) are
+> implemented and verified in the kernel and are reachable from `EditModeHost`. What remains is
+> forwarding touch events from `EditorActivity` and placing the transform panel — see
+> "Wiring the gestures" below.
 
 ---
 
@@ -25,7 +30,7 @@ a way to get edited geometry back onto the screen.
 
 ## What was added
 
-Nine files. Six are pure Kotlin with **zero Android imports**; three are the Android bridge.
+Eleven files. Seven are pure Kotlin with **zero Android imports**; four are the Android bridge.
 
 | File | Role | Platform |
 |---|---|---|
@@ -37,7 +42,9 @@ Nine files. Six are pure Kotlin with **zero Android imports**; three are the And
 | `MeshHistory.kt` | Undo / redo over `(mesh, selection)` snapshots | pure |
 | `GltfMeshLoader.kt` | glTF/GLB → `EditMesh`: real accessor reading, node transforms | Android |
 | `EditableMeshRenderer.kt` | `EditMesh` → Filament buffers + line overlay | Android |
+| `MeshGltfWriter.kt` | `EditMesh` → GLB export, so edits survive leaving Edit mode | pure |
 | `EditModeController.kt` | Owns Edit mode for one scene instance | Android |
+| `EditModeUi.kt` | `EditModeToolbarView` (button panel) + `EditModeHost` (integration glue) | Android |
 
 Design constraint worth stating: **operators never mutate their input.** Each returns a new
 `EditMesh`. That makes undo a reference swap rather than a set of inverse operations, and
@@ -53,7 +60,7 @@ kotlinc app/src/main/java/luxe/texture3d/app/{EditMesh,MeshTopology,MeshSelectio
 java -jar /tmp/meshkernel.jar
 ```
 
-**157 checks, all passing** on Kotlin 2.1.21 (the version the project builds with).
+**177 checks, all passing** on Kotlin 2.1.21 (the version the project builds with).
 
 The suite is deliberately aimed at invariants that are easy to break and invisible until
 they are expensive:
@@ -108,51 +115,92 @@ acceptable.
 
 ## Integration: wiring Edit mode into EditorActivity
 
-Four steps. This is the next piece of work.
+`EditModeHost` already owns the controller, the toolbar, asset hiding, tap routing and
+persistence, so `EditorActivity` needs five small changes. Nothing existing is removed.
 
-**1. Create the controller** after `sceneManager` and `selectionBounds` exist:
+**1. Add the field** near the other editor fields:
 
 ```kotlin
-editMode = EditModeController(
+private lateinit var editHost: EditModeHost
+```
+
+**2. Create it** after `sceneManager` and `selectionBounds` are constructed, and add its
+toolbar to `root`:
+
+```kotlin
+editHost = EditModeHost(
+    context = this,
     engine = viewer.engine,
     scene = viewer.scene,
     lineMaterialBuffer = readAsset("materials/luxe_lines.filamat"),
-    surfaceMaterialProvider = { /* see note below */ },
-    onSelectionChanged = { text -> status.text = text },
-    onGeometryChanged = { projectSession?.markDirty(); saveButton.text = "Save •" }
+    surfaceMaterialProvider = { /* see the API note below */ },
+    sceneManager = sceneManager,
+    onDirty = { projectSession?.markDirty(); if (::saveButton.isInitialized) saveButton.text = "Save •" },
+    onStatus = { text -> status.text = text }
+)
+editHost.sessionDir = projectSession?.sessionDir
+editHost.cameraProvider = {
+    val eye = DoubleArray(3); val target = DoubleArray(3); val up = DoubleArray(3)
+    manipulator.getLookAt(eye, target, up)
+    EditModeHost.CameraFrame(
+        eye = eye.map { it.toFloat() }.toFloatArray(),
+        target = target.map { it.toFloat() }.toFloatArray(),
+        up = up.map { it.toFloat() }.toFloatArray(),
+        width = surface.width,
+        height = surface.height,
+        tanHalfFovY = TAN_HALF_FOV
+    )
+}
+root.addView(
+    editHost.toolbar,
+    FrameLayout.LayoutParams(
+        ViewGroup.LayoutParams.WRAP_CONTENT,
+        ViewGroup.LayoutParams.WRAP_CONTENT,
+        Gravity.END or Gravity.CENTER_VERTICAL
+    ).apply { rightMargin = dp(8) }
 )
 ```
 
-**2. Hide the gltfio asset while its mesh is being edited.** Without this you see both the
-original and the edited copy at once:
+with `private const val TAN_HALF_FOV = 0.4142f` in the companion object (45° vertical FOV).
+
+Note the y-axis difference: `View.pick()` measures y from the bottom, while
+`MeshRaycast.rayFromScreen` takes top-left like Android touch events. `EditModeHost`
+handles that, so pass `x` and `y` straight through.
+
+**3. Route taps.** Object mode keeps working unchanged when Edit mode is inactive:
 
 ```kotlin
-val record = sceneManager.selected() ?: return
-sceneManager.setVisible(record.uid, visible = false)
-editMode.enter(record, projectSession?.sessionDir)
-// on exit: sceneManager.setVisible(uid, true); editMode.exit()
+cameraInput.onTap = { x, y -> if (!editHost.handleTap(x, y)) pickScene(x, y) }
 ```
 
-**3. Route taps.** Note the y-axis difference: `View.pick()` wants y measured from the
-bottom, `MeshRaycast.rayFromScreen` wants top-left like Android touch events.
+**4. Add an entry point.** The natural place is each row of `showSceneList()`, next to the
+existing Rename and Delete buttons:
 
 ```kotlin
-cameraInput.onTap = { x, y ->
-    if (editMode.active) {
-        val eye = DoubleArray(3); val target = DoubleArray(3); val up = DoubleArray(3)
-        manipulator.getLookAt(eye, target, up)
-        val ray = MeshRaycast.rayFromScreen(
-            eye.toFloat3(), target.toFloat3(), up.toFloat3(),
-            x, y, surface.width, surface.height, TAN_HALF_FOV   // ~0.4142 at 45°
-        )
-        editMode.pick(ray.origin(), ray.direction(), additive = false)
-    } else pickScene(x, y)
-}
+row.addView(sceneControl("Edit", {
+    dialog.dismiss()
+    editHost.enter(record.uid, projectSession?.sessionDir)
+}), LinearLayout.LayoutParams(dp(56), dp(32)).apply { leftMargin = dp(4) })
 ```
 
-**4. Bind the WIP chrome.** The second header row and left rail already have placeholders
-for exactly these: element mode (1/2/3), Select All, Invert, Grow, Subdivide, Extrude,
-Inset, Delete, Weld, Undo, Redo. Each maps to one call on `EditModeController`.
+**5. Clean up** in `onDestroy()`, alongside the existing `sceneManager.destroy()`:
+
+```kotlin
+if (::editHost.isInitialized) runCatching { editHost.destroy() }
+```
+
+### What you get on screen
+
+A right-side panel with element mode (Vert / Edge / Face), Subdivide, Extrude, Inset,
+Delete, Weld, All, Invert, Grow, None, Undo, Redo, Exit. Buttons disable themselves when
+they would be a no-op. Leaving Edit mode writes the edited geometry to
+`<sessionDir>/local/<uid>-edited.glb`.
+
+### Binding the WIP chrome later
+
+The second header row and left rail already have placeholders for these same operations.
+Pointing them at `editHost.controller` is a one-line change each; the toolbar is a working
+reference implementation of the interaction model, not the final home for these controls.
 
 ### Two API details to confirm against Filament 1.69.4
 
@@ -169,11 +217,14 @@ Inset, Delete, Weld, Undo, Redo. Each maps to one call on `EditModeController`.
 | Limitation | Consequence | Fix |
 |---|---|---|
 | Selection clears after structural edits | Blender keeps new faces selected post-extrude | Have operators return an id map |
+| Edited mesh saved as a side GLB | The scene instance still points at the original asset until Phase 6C | Repoint `Record.source` at the exported GLB |
 | Brute-force picking | Fine for taps, not per-frame hover | BVH over faces; keep current code as the leaf intersector |
 | Full-snapshot undo | ~8 MB/step at 200k tris | Store per-operator attribute deltas |
 | Single instance in Edit mode at a time | No multi-object editing | Deliberate for v1 |
 | Wireframe drawn for every edge | Skipped above 120k edges | Draw selected + boundary edges only |
 | Subset subdivision leaves T-junctions | Shading artefacts | Pair with `weld`, or restrict to whole-mesh |
+| Export carries geometry only | No materials, textures, vertex colours or tangents | Extend `MeshGltfWriter` alongside a material graph |
+| No hover highlight | Selection only on tap, not on drag-over | BVH, then hit test per move event |
 
 ## Windows and Linux
 
@@ -196,3 +247,42 @@ the shell (Activities, Views, touch), not the engine:
 **Suggested order:** finish the Android Edit-mode UI first (the interaction model is the
 hard part and it is touch-specific), then extract `:mesh`, then build the desktop shell
 against the already-proven engine.
+
+---
+
+## Wiring the gestures
+
+`EditModeHost` exposes the gesture API; `EditorActivity` only has to forward events to it while
+Edit mode is active, and place `transformPanel` on the side opposite `toolbar`.
+
+```kotlin
+// 1. Place the panel opposite the toolbar. In the existing frame layout that hosts
+//    editHost.toolbar, add editHost.transformPanel with Gravity.START (the toolbar is END).
+container.addView(editHost.transformPanel, FrameLayout.LayoutParams(
+    FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT,
+    Gravity.START or Gravity.CENTER_VERTICAL
+))
+
+// 2. In the viewport's onTouch, while editHost.active, before the gesture detector sees it:
+editHost.handleLongPress(x, y)               // commit the element under the finger
+editHost.handleDrag(x, y, dx, dy)            // one-finger drag (x, y are absolute)
+editHost.handleDragEnd()                     // commit knife / loop cut / bevel
+editHost.handleTwoFingerScroll(distanceY)    // add segments, loops or rings
+
+// 3. Call editHost.beginGesture() on ACTION_DOWN so the whole drag is one undo step.
+```
+
+`handleLongPress` returns false when nothing was hit, so the Activity can fall back to its
+normal long-press behaviour.
+
+## Design notes worth keeping
+
+- **Gestures belong in the host, not the view.** `EditModeToolbarView` renders buttons and
+  reports presses; everything that touches meshes, cameras or history lives in `EditModeHost`.
+  That split is what keeps the Activity patch to a dozen lines.
+- **One undo step per gesture.** `beginGesture` / `preview` / `endGesture` exist because a drag
+  has to show its result continuously; recording history per frame would bury the edit.
+- **Never trust an unrun compile.** Every tool here had bugs that compiled cleanly: the bevel
+  collapsed to zero width on coplanar diagonals, the loop cut left a seam on closed rings, the
+  bevel fillets faced inward on some edges. All were caught by asserting Euler characteristic,
+  boundary count, unit normals and consistent winding — not by reading the code.

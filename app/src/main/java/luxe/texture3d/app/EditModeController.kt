@@ -66,6 +66,9 @@ class EditModeController(
 
     /** Warnings from the last load: non-manifold edges, unsupported primitives, missing buffers. */
     var loadWarnings: List<String> = emptyList()
+
+    /** Index the most recent [pick] hit, or -1. Lets a host act on a long-pressed element. */
+    var lastPick: Int = -1
         private set
 
     private var renderer: EditableMeshRenderer? = null
@@ -74,7 +77,8 @@ class EditModeController(
      * Asset-root space -> world. Mirrors `EditorSceneManager.applyTransform`, which
      * composes TRS over the model's grounded normalisation matrix.
      */
-    private var worldMatrix: FloatArray = IDENTITY.copyOf()
+    /** Object-local -> world. Published so hosts can convert picking rays and cut planes. */
+    var worldMatrix: FloatArray = IDENTITY.copyOf()
 
     // ------------------------------------------------------------- lifecycle
 
@@ -191,6 +195,7 @@ class EditModeController(
             ElementMode.FACE -> MeshRaycast.pickFace(mesh, origin, direction)
         }
 
+        lastPick = hitIndex
         if (hitIndex < 0) {
             if (!additive) selection.clear()
             refresh()
@@ -269,6 +274,58 @@ class EditModeController(
         }
     }
 
+    // --------------------------------------------------------- modelling tools
+
+    /** Inserts [count] edge loops across the strip starting at edge [edge]. */
+    fun loopCut(edge: Int, t: Float = 0.5f, count: Int = 1) {
+        if (edge !in 0 until topology.edgeCount) return
+        val result = MeshOperators.loopCut(mesh, topology, edge, t, count)
+        if (result.mesh eq mesh) return
+        apply("Loop cut", result.mesh)
+    }
+
+    /** Cuts the mesh with a plane. A one-finger drag becomes one plane. */
+    fun knife(planePoint: FloatArray, planeNormal: FloatArray) {
+        apply("Knife", MeshOperators.cutWithPlane(mesh, planePoint, planeNormal))
+    }
+
+    /** Bevels the currently selected edges with [segments] strips across the corner. */
+    fun bevel(segments: Int = 1, width: Float = 0.25f) {
+        val edges = selection.edges.toSet()
+        if (edges.isEmpty()) return
+        apply("Bevel", MeshOperators.bevelEdges(mesh, topology, edges, segments, width))
+    }
+
+    /** Adds [rings] cuts inside the selected face region — "mesh relab". */
+    fun relab(rings: Int = 1) {
+        val faces = selection.faces.toSet()
+        if (faces.isEmpty()) return
+        apply("Mesh relab", MeshOperators.insertRings(mesh, topology, faces, rings))
+    }
+
+    fun translateSelected(dx: Float, dy: Float, dz: Float) {
+        if (selection.vertices.isEmpty()) return
+        apply("Move", MeshOperators.translateVertices(mesh, selection.vertices.toSet(), dx, dy, dz), true)
+    }
+
+    fun rotateSelected(axisX: Float, axisY: Float, axisZ: Float, angleRadians: Float) {
+        if (selection.vertices.isEmpty()) return
+        val pivot = MeshOperators.selectionCentroid(mesh, selection.vertices.toSet())
+        apply("Rotate", MeshOperators.rotateVertices(
+            mesh, selection.vertices.toSet(), axisX, axisY, axisZ, angleRadians, pivot
+        ), true)
+    }
+
+    fun scaleSelected(sx: Float, sy: Float, sz: Float) {
+        if (selection.vertices.isEmpty()) return
+        val pivot = MeshOperators.selectionCentroid(mesh, selection.vertices.toSet())
+        apply("Scale", MeshOperators.scaleVertices(mesh, selection.vertices.toSet(), sx, sy, sz, pivot), true)
+    }
+
+    fun mirror(axis: MeshOperators.Axis = MeshOperators.Axis.X) {
+        apply("Mirror", MeshOperators.mirror(mesh, axis))
+    }
+
     fun weld(tolerance: Float = 1e-5f) {
         apply("Weld", MeshOperators.weldVertices(mesh, tolerance))
     }
@@ -291,13 +348,53 @@ class EditModeController(
         onSelectionChanged(selection.describe())
     }
 
-    private fun apply(label: String, result: EditMesh) {
+    /** True when two meshes are the same size and hold the same data. */
+    private infix fun EditMesh.eq(other: EditMesh): Boolean =
+        this === other || (vertexCount == other.vertexCount &&
+            faceCount == other.faceCount &&
+            positions contentEquals other.positions &&
+            indices contentEquals other.indices)
+
+    // ------------------------------------------------------------ live gestures
+    //
+    // A drag has to show its result continuously, but recording a history entry per frame
+    // would bury the real edit under hundreds of intermediate steps. So a gesture snapshots
+    // the mesh up front, rewrites the live mesh as the finger moves, and pushes exactly one
+    // history entry when the finger lifts.
+
+    private var gestureBase: EditMesh? = null
+
+    /** Starts a gesture. Call before the first [preview]. */
+    fun beginGesture() { if (active) gestureBase = mesh }
+
+    /** Replaces the live mesh without touching history. */
+    fun preview(result: EditMesh) {
+        if (gestureBase == null) return
+        mesh = result
+        topology = MeshTopology.of(mesh)
+        refresh()
+        onGeometryChanged(mesh)
+    }
+
+    /** Ends a gesture, recording one undo step spanning the whole drag. */
+    fun endGesture(label: String) {
+        val base = gestureBase ?: return
+        gestureBase = null
+        if (base eq mesh) return
+        history.record(label, base, selection)
+        onSelectionChanged(selection.describe())
+        onGeometryChanged(mesh)
+    }
+
+    private fun apply(label: String, result: EditMesh, keepSelection: Boolean = false) {
         history.record(label, mesh, selection)
         mesh = result
         topology = MeshTopology.of(mesh)
         // Operators renumber elements, so there is nothing meaningful left to select
-        // until they report an id mapping (see the class documentation).
-        selection.clearAll()
+        // until they report an id mapping (see the class documentation). Transforms are the
+        // exception: they only move vertices, so the selection survives them and a drag can
+        // keep working on the same elements.
+        if (!keepSelection) selection.clearAll()
         refresh()
         onSelectionChanged(selection.describe())
         onGeometryChanged(mesh)

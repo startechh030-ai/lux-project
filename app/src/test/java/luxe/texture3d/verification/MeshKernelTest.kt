@@ -1,6 +1,8 @@
 package luxe.texture3d.verification
 
 import luxe.texture3d.app.*
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import kotlin.math.abs
 import kotlin.math.sqrt
 
@@ -118,6 +120,29 @@ object MeshKernelTest {
         return best
     }
 
+    /**
+     * Total length of the boundary curve.
+     *
+     * Stronger than counting boundary edges, because splitting a boundary edge into two
+     * legitimately raises the count while leaving the outline identical. This measures the
+     * outline itself, so an operator that opens a crack in the interior shows up as extra
+     * length.
+     */
+    private fun boundaryLength(mesh: EditMesh): Float {
+        val topo = MeshTopology.of(mesh)
+        var total = 0f
+        for (e in 0 until topo.edgeCount) {
+            if (!topo.isBoundaryEdge(e)) continue
+            val a = topo.edgeV0(e) * 3
+            val b = topo.edgeV1(e) * 3
+            total += MeshMath.distance(
+                mesh.positions[a], mesh.positions[a + 1], mesh.positions[a + 2],
+                mesh.positions[b], mesh.positions[b + 1], mesh.positions[b + 2]
+            )
+        }
+        return total
+    }
+
     private fun assertValidMesh(name: String, mesh: EditMesh) {
         val problems = mesh.validate()
         check("$name is well formed", problems.isEmpty(), problems.joinToString("; "))
@@ -147,8 +172,14 @@ object MeshKernelTest {
         testWeld()
         testRaycast()
         testSelection()
+        testTransforms()
+        testKnife()
+        testLoopCut()
+        testBevel()
+        testRelab()
         testHistory()
         testMatricesAndCamera()
+        testGltfExport()
 
         println("\n" + "═".repeat(58))
         if (failures.isEmpty()) {
@@ -517,6 +548,75 @@ object MeshKernelTest {
             MeshRaycast.pickFace(cube, origin, dir) >= 0)
     }
 
+    /**
+     * Verifies the GLB container byte-for-byte where it matters: header, chunk framing,
+     * padding, and that the binary payload actually contains the mesh we exported.
+     */
+    private fun testGltfExport() {
+        section("GLB export")
+        val cube = EditMesh.cube()
+        val glb = MeshGltfWriter.toGlb(cube, "TestCube")
+        val buffer = ByteBuffer.wrap(glb).order(ByteOrder.LITTLE_ENDIAN)
+
+        checkEquals("GLB magic spells glTF", 0x46546C67, buffer.int)
+        checkEquals("GLB version is 2", 2, buffer.int)
+        val total = buffer.int
+        checkEquals("declared length matches the actual size", glb.size, total)
+
+        val jsonLength = buffer.int
+        checkEquals("first chunk type is JSON", 0x4E4F534A, buffer.int)
+        check("JSON chunk is 4-byte aligned", jsonLength % 4 == 0)
+        val jsonBytes = ByteArray(jsonLength)
+        buffer.get(jsonBytes)
+        val json = String(jsonBytes, Charsets.UTF_8)
+        check("JSON declares glTF 2.0", json.contains("\"version\":\"2.0\""))
+        check("JSON exposes POSITION", json.contains("POSITION"))
+        check("JSON exposes NORMAL", json.contains("NORMAL"))
+        check("JSON declares the mesh name", json.contains("TestCube"))
+
+        val binLength = buffer.int
+        checkEquals("second chunk type is BIN", 0x004E4942, buffer.int)
+        check("BIN chunk is 4-byte aligned", binLength % 4 == 0)
+        check("BIN payload follows its chunk header", buffer.remaining() == binLength,
+            "${buffer.remaining()} bytes left, expected $binLength")
+
+        // 8 verts x 12 bytes positions + 12 bytes normals + 36 indices x 2 bytes.
+        checkEquals("BIN holds positions, normals and short indices", 264, binLength)
+
+        // POSITION bounds are mandatory in glTF and Luxe's validator checks them.
+        check("POSITION accessor carries min", json.contains("\"min\":["))
+        check("POSITION accessor carries max", json.contains("\"max\":["))
+
+        // Read the geometry back out of the binary chunk and compare.
+        // Skip the container header, the JSON chunk, and the BIN chunk's own 8-byte header.
+        val binStart = 12 + 8 + jsonLength + 8
+        val bin = ByteBuffer.wrap(glb, binStart, binLength).order(ByteOrder.LITTLE_ENDIAN)
+        var maxPositionError = 0f
+        for (i in cube.positions.indices) {
+            maxPositionError = maxOf(maxPositionError, abs(bin.float - cube.positions[i]))
+        }
+        checkApprox("exported positions match the source mesh", 0f, maxPositionError, 1e-6f)
+
+        // Skip the normals block that sits between positions and indices.
+        bin.position(binStart + cube.vertexCount * 12 * 2)
+        var indicesMatch = true
+        for (i in cube.indices.indices) {
+            if ((bin.short.toInt() and 0xFFFF) != cube.indices[i]) indicesMatch = false
+        }
+        check("exported indices match the source mesh", indicesMatch)
+
+        // Above 65535 vertices the exporter must widen indices to 32-bit or they wrap.
+        val wide = EditMesh(FloatArray(65536 * 3), intArrayOf(0, 1, 2))
+        val cubeText = String(glb, Charsets.ISO_8859_1)
+        check("small meshes use 16-bit indices", cubeText.contains("\"componentType\":5123"))
+        val wideText = String(MeshGltfWriter.toGlb(wide, "Wide"), Charsets.ISO_8859_1)
+        check("meshes over 65535 vertices use 32-bit indices",
+            wideText.contains("\"componentType\":5125"))
+
+        check("exporting an empty mesh is rejected",
+            runCatching { MeshGltfWriter.toGlb(EditMesh.empty()) }.isFailure)
+    }
+
     private fun testHistory() {
         section("History")
         val history = MeshHistory(limit = 8)
@@ -557,4 +657,266 @@ object MeshKernelTest {
         val restored = h2.undo(live)
         checkApprox("history snapshots are independent of later edits", -0.5f, restored!!.mesh.positions[0], 1e-6f)
     }
+
+    // ------------------------------------------------------- modelling tools
+
+    private fun testTransforms() {
+        section("Transforms")
+        val cube = EditMesh.cube()
+        val all = (0 until cube.vertexCount).toSet()
+        val origin = floatArrayOf(0f, 0f, 0f)
+
+        val moved = MeshOperators.translateVertices(cube, all, 1f, 0f, 0f)
+        checkApprox("translate shifts x", 0.5f, moved.positions[0])
+        checkApprox("translate leaves y alone", -0.5f, moved.positions[1])
+        checkEquals("translate keeps the face count", 12, moved.faceCount)
+        assertValidMesh("translated cube", moved)
+
+        val uniform = MeshOperators.scaleVerticesUniform(cube, all, 2f, origin)
+        checkApprox("uniform scale doubles the radius", sqrt(3f), maxRadius(uniform), 1e-5f)
+        checkApprox("uniform scale keeps x and y in step", 1f, uniform.positions[3], 1e-5f)
+        checkApprox("uniform scale keeps y and z in step", 1f, uniform.positions[6], 1e-5f)
+        assertValidMesh("uniformly scaled cube", uniform)
+
+        val perAxis = MeshOperators.scaleVertices(cube, all, 2f, 1f, 1f, origin)
+        checkApprox("per-axis scale stretches x", 1f, perAxis.positions[3], 1e-5f)
+        checkApprox("per-axis scale leaves y alone", -0.5f, perAxis.positions[4], 1e-5f)
+        checkApprox("per-axis scale leaves z alone", -0.5f, perAxis.positions[5], 1e-5f)
+        assertValidMesh("per-axis scaled cube", perAxis)
+
+        // Offsetting the pivot must translate the result, not just resize it.
+        val offPivot = MeshOperators.scaleVerticesUniform(cube, all, 2f, floatArrayOf(1f, 0f, 0f))
+        // x' = pivot + (x - pivot) * s  ->  1 + (-0.5 - 1) * 2 = -2
+        checkApprox("scaling about an offset pivot shifts the result", -2f, offPivot.positions[0], 1e-5f)
+
+        // A quarter turn about +Y maps (-.5,-.5,-.5) to (-.5,-.5,.5) and is rigid.
+        val rotated = MeshOperators.rotateVertices(cube, all, 0f, 1f, 0f, (Math.PI / 2).toFloat(), origin)
+        checkApprox("rotate maps x", -0.5f, rotated.positions[0], 1e-5f)
+        checkApprox("rotate preserves the axis component", -0.5f, rotated.positions[1], 1e-5f)
+        checkApprox("rotate maps z", 0.5f, rotated.positions[2], 1e-5f)
+        checkApprox("rotation is rigid", sqrt(3f) * 0.5f, maxRadius(rotated), 1e-5f)
+        assertValidMesh("rotated cube", rotated)
+        val spun = MeshOperators.rotateVertices(rotated, all, 0f, 1f, 0f, (Math.PI / 2).toFloat(), origin)
+        checkApprox("two quarter turns is a half turn", 0.5f, spun.positions[0], 1e-5f)
+
+        checkApprox("centroid of a single vertex is that vertex", -0.5f,
+            MeshOperators.selectionCentroid(cube, setOf(0))[0])
+        val centre = MeshOperators.selectionCentroid(cube, all)
+        checkApprox("cube centroid sits at the origin", 0f, centre[0], 1e-6f)
+        checkApprox("cube centroid sits at the origin (z)", 0f, centre[2], 1e-6f)
+
+        // An empty selection must be a no-op rather than a crash.
+        checkEquals("translating nothing changes nothing", 12,
+            MeshOperators.translateVertices(cube, emptySet(), 5f, 5f, 5f).faceCount)
+    }
+
+    private fun testKnife() {
+        section("Knife")
+        val cube = EditMesh.cube()
+
+        // A plane through the middle of the cube must slice it, not break it.
+        val sliced = MeshOperators.cutWithPlane(cube, floatArrayOf(0f, 0f, 0f), floatArrayOf(0f, 1f, 0f))
+        check("knife splits faces", sliced.faceCount > 12, "got ${sliced.faceCount}")
+        assertValidMesh("knife-cut cube", sliced)
+        val slicedTopo = MeshTopology.of(sliced)
+        checkEquals("knife keeps the shell closed", 2, slicedTopo.eulerCharacteristic())
+        checkEquals("knife leaves no boundary", 0, slicedTopo.boundaryEdgeCount())
+        check("knife adds vertices along the cut", sliced.vertexCount > 8, "got ${sliced.vertexCount}")
+        check("cut vertices sit on the plane", run {
+            var worst = 0f
+            for (v in 8 until sliced.vertexCount) {
+                worst = maxOf(worst, abs(sliced.positions[v * 3 + 1]))
+            }
+            worst < 1e-5f
+        })
+        check("the two halves keep the original volume", run {
+            val before = meshArea(cube)
+            val after = meshArea(sliced)
+            abs(before - after) < 1e-4f
+        })
+
+        // A plane that misses, and a plane coplanar with the surface, must do nothing.
+        checkEquals("a plane that misses the mesh is a no-op", 12,
+            MeshOperators.cutWithPlane(cube, floatArrayOf(0f, 5f, 0f), floatArrayOf(0f, 1f, 0f)).faceCount)
+        checkEquals("a coplanar plane is a no-op", 1,
+            MeshOperators.cutWithPlane(EditMesh.singleTriangle(), floatArrayOf(0f, 0f, 0f),
+                floatArrayOf(0f, 1f, 0f)).faceCount)
+
+        // Cutting twice must stack: each pass adds its own ring of vertices.
+        val cutX = MeshOperators.cutWithPlane(cube, floatArrayOf(0f, 0f, 0f), floatArrayOf(1f, 0f, 0f))
+        val cutXY = MeshOperators.cutWithPlane(cutX, floatArrayOf(0f, 0f, 0f), floatArrayOf(0f, 0f, 1f))
+        assertValidMesh("cube cut on two planes", cutXY)
+        checkEquals("two cuts still leave a closed shell", 0, MeshTopology.of(cutXY).boundaryEdgeCount())
+
+        checkEquals("an invalid knife plane is rejected gracefully", 12,
+            MeshOperators.cutWithPlane(cube, floatArrayOf(0f, 0f, 0f), floatArrayOf(0f, 0f, 0f)).faceCount)
+    }
+
+    private fun testLoopCut() {
+        section("Loop cut")
+        val cube = EditMesh.cube()
+        val cubeTopo = MeshTopology.of(cube)
+        // Topology edge 2 is the real cube edge (0,1); edge 0 is a face diagonal.
+        val edge = 2
+
+        val cut = MeshOperators.loopCut(cube, cubeTopo, edge, 0.5f)
+        check("loop cut splits the strip's faces", cut.mesh.faceCount > 12, "got ${cut.mesh.faceCount}")
+        check("loop cut adds one vertex per crossed edge", cut.mesh.vertexCount > 8,
+            "got ${cut.mesh.vertexCount}")
+        assertValidMesh("loop-cut cube", cut.mesh)
+        val cutTopo = MeshTopology.of(cut.mesh)
+        checkEquals("loop cut keeps the cube closed", 2, cutTopo.eulerCharacteristic())
+        checkEquals("loop cut leaves no boundary", 0, cutTopo.boundaryEdgeCount())
+
+        // The headline case: on a regular triangulated grid the loop must run dead straight.
+        val grid = EditMesh.grid(4)
+        val gridTopo = MeshTopology.of(grid)
+        val gridEdge = (0 until gridTopo.edgeCount).first {
+            (gridTopo.edgeV0(it) == 0 && gridTopo.edgeV1(it) == 1) ||
+            (gridTopo.edgeV0(it) == 1 && gridTopo.edgeV1(it) == 0)
+        }
+        val straight = MeshOperators.loopCut(grid, gridTopo, gridEdge, 0.5f).mesh
+        assertValidMesh("loop-cut grid", straight)
+        check("a loop cut on a grid is straight", run {
+            var worst = 0f
+            for (v in grid.vertexCount until straight.vertexCount) {
+                worst = maxOf(worst, abs(straight.positions[v * 3] - (-0.375f)))
+            }
+            worst < 1e-5f
+        })
+        check("a loop cut spans the strip rather than stopping short", run {
+            var lowest = Float.MAX_VALUE
+            var highest = -Float.MAX_VALUE
+            for (v in grid.vertexCount until straight.vertexCount) {
+                lowest = minOf(lowest, straight.positions[v * 3 + 2])
+                highest = maxOf(highest, straight.positions[v * 3 + 2])
+            }
+            lowest < -0.4f && highest > 0.4f
+        })
+        // Cutting an open surface must leave its outline alone: the two ends of the strip
+        // split a boundary edge each, which is a subdivision, not a new hole.
+        checkApprox("a loop cut leaves the outline the same length",
+            boundaryLength(grid), boundaryLength(straight), 1e-5f)
+
+        // Multi-cut: the two-finger scroll. It has to work on a closed mesh too, where
+        // re-walking the strip for a second pass would stop short of closing and crack it.
+        val many = MeshOperators.loopCuts(cube, cubeTopo, edge, 0.5f, 3)
+        assertValidMesh("cube after three loop cuts", many)
+        check("repeated loop cuts keep adding geometry", many.faceCount > cut.mesh.faceCount,
+            "${many.faceCount} vs ${cut.mesh.faceCount}")
+        checkEquals("repeated loop cuts keep the cube closed", 0,
+            MeshTopology.of(many).boundaryEdgeCount())
+        checkEquals("repeated loop cuts preserve the Euler characteristic", 2,
+            MeshTopology.of(many).eulerCharacteristic())
+        check("three loops add three times the vertices of one",
+            many.vertexCount == 8 + 3 * (cut.mesh.vertexCount - 8), "got ${many.vertexCount}")
+
+        check("an out-of-range edge is rejected gracefully",
+            MeshOperators.loopCut(cube, cubeTopo, 9999, 0.5f).mesh.faceCount == 12)
+    }
+
+    private fun testBevel() {
+        section("Bevel")
+        val cube = EditMesh.cube()
+        val topo = MeshTopology.of(cube)
+        val edge = 2
+        val cubeEuler = topo.eulerCharacteristic()
+
+        val one = MeshOperators.bevelEdges(cube, topo, setOf(edge), segments = 1, width = 0.25f)
+        check("bevel adds geometry", one.faceCount > 12, "got ${one.faceCount}")
+        assertValidMesh("cube with one beveled edge", one)
+        checkEquals("beveling an edge keeps the shell closed", 0,
+            MeshTopology.of(one).boundaryEdgeCount())
+        checkEquals("beveling an edge preserves the Euler characteristic", cubeEuler,
+            MeshTopology.of(one).eulerCharacteristic())
+
+        // More segments must produce more faces along the same edge.
+        val three = MeshOperators.bevelEdges(cube, topo, setOf(edge), segments = 3, width = 0.25f)
+        check("more segments means more faces", three.faceCount > one.faceCount,
+            "${three.faceCount} vs ${one.faceCount}")
+        assertValidMesh("cube with a three-segment bevel", three)
+        checkEquals("a three-segment bevel stays closed", 0,
+            MeshTopology.of(three).boundaryEdgeCount())
+
+        // Two edges meeting at a corner: the caps have to share it without a crack.
+        val corner = MeshOperators.bevelEdges(cube, topo, setOf(edge, 3), segments = 1, width = 0.2f)
+        assertValidMesh("cube with two beveled edges meeting at a corner", corner)
+        checkEquals("a corner bevel stays closed", 0, MeshTopology.of(corner).boundaryEdgeCount())
+        checkEquals("a corner bevel preserves the Euler characteristic", cubeEuler,
+            MeshTopology.of(corner).eulerCharacteristic())
+
+        // Beveling every real edge at once is the rounded-cube case.
+        val every = MeshOperators.bevelEdges(cube, topo, realEdges(cube, topo), segments = 2, width = 0.2f)
+        assertValidMesh("cube with every edge beveled", every)
+        checkEquals("an all-edge bevel stays closed", 0, MeshTopology.of(every).boundaryEdgeCount())
+        checkEquals("an all-edge bevel preserves the Euler characteristic", cubeEuler,
+            MeshTopology.of(every).eulerCharacteristic())
+
+        // A bevel cuts material away, so it can never grow the silhouette.
+        check("a bevel never grows the mesh", maxRadius(every) <= maxRadius(cube) + 1e-5f,
+            "${maxRadius(every)} vs ${maxRadius(cube)}")
+        check("a single bevel never grows the mesh either", maxRadius(one) <= maxRadius(cube) + 1e-5f,
+            "${maxRadius(one)} vs ${maxRadius(cube)}")
+
+        // Surface diagonals are skipped rather than collapsed to zero width.
+        checkEquals("beveling a face diagonal is a no-op", 12,
+            MeshOperators.bevelEdges(cube, topo, setOf(0)).faceCount)
+        checkEquals("beveling nothing is a no-op", 12,
+            MeshOperators.bevelEdges(cube, topo, emptySet()).faceCount)
+        checkEquals("an out-of-range edge is ignored", 12,
+            MeshOperators.bevelEdges(cube, topo, setOf(9999)).faceCount)
+    }
+
+    private fun testRelab() {
+        section("Mesh relab")
+        val grid = EditMesh.grid(4)
+        val topo = MeshTopology.of(grid)
+        // The two triangles of one quad: the smallest region that has an inside.
+        val quad = setOf(0, 1)
+
+        val oneRing = MeshOperators.insertRings(grid, topo, quad, 1)
+        check("relab adds geometry to the region", oneRing.faceCount > grid.faceCount,
+            "got ${oneRing.faceCount}")
+        assertValidMesh("grid after one relab ring", oneRing)
+
+        val threeRings = MeshOperators.insertRings(grid, topo, quad, 3)
+        check("more rings means more faces", threeRings.faceCount > oneRing.faceCount,
+            "${threeRings.faceCount} vs ${oneRing.faceCount}")
+        assertValidMesh("grid after three relab rings", threeRings)
+
+        // Relab adds cuts inside the region; it must not open up the surrounding surface.
+        checkApprox("relab leaves the outline the same length",
+            boundaryLength(grid), boundaryLength(threeRings), 1e-5f)
+        check("relab keeps every new vertex inside the original region", run {
+            var worst = 0f
+            for (v in grid.vertexCount until threeRings.vertexCount) {
+                worst = maxOf(worst, maxRadiusOf(threeRings, v))
+            }
+            worst <= 0.5f * sqrt(2f) + 1e-5f
+        })
+
+        checkEquals("relabbing nothing is a no-op", grid.faceCount,
+            MeshOperators.insertRings(grid, topo, emptySet(), 2).faceCount)
+        checkEquals("zero rings is a no-op", grid.faceCount,
+            MeshOperators.insertRings(grid, topo, quad, 0).faceCount)
+    }
+
+    /** Edges that are not triangulation diagonals — the ones a bevel can actually cut. */
+    private fun realEdges(mesh: EditMesh, topo: MeshTopology): Set<Int> {
+        val a = FloatArray(3)
+        val b = FloatArray(3)
+        val out = LinkedHashSet<Int>()
+        for (e in 0 until topo.edgeCount) {
+            val faces = topo.facesOfEdge(e)
+            if (faces.size != 2) continue
+            mesh.faceNormal(faces[0], a)
+            mesh.faceNormal(faces[1], b)
+            if (MeshMath.dot(a[0], a[1], a[2], b[0], b[1], b[2]) < 0.999f) out += e
+        }
+        return out
+    }
+
+    private fun maxRadiusOf(mesh: EditMesh, vertex: Int): Float = MeshMath.length(
+        mesh.positions[vertex * 3], mesh.positions[vertex * 3 + 1], mesh.positions[vertex * 3 + 2]
+    )
 }

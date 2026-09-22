@@ -398,11 +398,134 @@ back to the GPU.
   draws the wireframe and selection overlay as lines using the existing `luxe_lines.filamat`.
 - Added `EditModeController`: owns Edit mode for one scene instance — CPU mesh, topology,
   selection, history, picking, and the GPU round trip.
+- Added `EditModeUi`: a right-side Edit-mode toolbar (element mode, subdivide, extrude, inset,
+  delete, weld, selection, undo/redo, exit) plus `EditModeHost`, the integration glue that hides
+  the source glTF asset while its mesh is being edited, converts viewport taps into picking
+  rays, and keeps the project's dirty state honest. Buttons disable themselves when the current
+  selection makes them a no-op.
+- Added `MeshGltfWriter`: exports an `EditMesh` to a GLB container so edits are not lost when
+  leaving Edit mode. Written without `org.json` so the export path is testable on a plain JVM.
 - Added `app/src/test/java/luxe/texture3d/verification/MeshKernelTest.kt`, a standalone JVM
-  harness of 157 checks covering Euler characteristic, winding consistency, analytic Loop
+  harness of 283 checks covering Euler characteristic, winding consistency, analytic Loop
   positions, area preservation, picking round trips, and history isolation. It runs with
   `kotlinc` alone, with no Android test runner.
 
 MeshLab itself is not embeddable on Android and VCGlib, its kernel, is GPL — linking it would
 force the whole app to be GPL. The operators were therefore written from scratch. See
 `PHASE6_PLAN.md` for the reasoning and for the remaining UI wiring steps.
+
+
+---
+
+## Modelling tools — 0.39.0
+
+With the kernel in place, the tools a modeller actually reaches for. All of them are verified
+by the JVM harness, which grew from 177 to 283 checks.
+
+### Loop cut
+
+Walking a triangle strip sounds simple and is not. On a triangulated quad, advancing "one
+corner per face" makes the loop zigzag across the triangle fan instead of following the quad
+rows. The walk therefore tracks the strip's two rails and decides each exit by asking whether
+the two candidate edges are the quad's shared diagonal (`isCoplanarEdge`: the two triangles
+of a quad are coplanar, a real side belongs to two different faces). Where that is
+inconclusive — a perfectly flat surface, where everything is coplanar — it falls back to
+alternating, which is exact on a regular grid. Verified: a loop cut across `EditMesh.grid(4)`
+is straight to within 1e-5 and spans the whole strip.
+
+Two details that were bugs before they were features:
+
+- A strip that closes into a ring returns to the edge it started from, so the last rung *is*
+  the first one. Reusing that vertex is what makes a loop seamless; allocating a fresh one
+  left a crack down the seam.
+- Multiple loops are inserted in one pass rather than by re-walking the strip, because a
+  second walk on a closed mesh stops short of closing and cracks the shell.
+
+### Knife
+
+Cuts the mesh with a plane. Triangles straddling the plane are clipped into three, and the two
+new vertices on the cut line are welded at 1e-4 so the cut seam is not a hairline crack.
+Cutting a closed cube leaves it closed (Euler 2, no boundary). A plane that misses the mesh,
+and one coplanar with it, are both no-ops.
+
+### Bevel
+
+The fiddliest of the four, because a corner usually belongs to faces that were never beveled.
+
+Each adjacent face's corners slide *along* their edges, into the face, by `width` — bounded by
+the shortest edge at either end of either face, so no value below 1 can overshoot. The vacated
+wedge is closed by the chamfer strip and one end cap per end, with the strips following a
+quadratic Bezier whose control point is the original corner, so a multi-segment bevel reads as
+a rounded fillet rather than a faceted chamfer.
+
+Two things had to be right for it to stay watertight:
+
+- **Split points propagate.** A slid corner inserted into only the beveled face would leave
+  the neighbour across that edge running its full length, cracking the shell. Every slid
+  corner is registered as a split point on the edge it slides along, and *every* face using
+  that edge picks it up — so faces gain corners they never asked for, which is exactly what a
+  real bevel does.
+- **Winding is measured, not assumed.** Each strip is oriented against the bisector of its two
+  face normals, because relying on the topology's canonical edge order produced fillets facing
+  inward on some edges and outward on others.
+
+Faces that pick up a collinear split point are triangulated from whichever corner keeps every
+triangle non-degenerate. Edges whose two faces are coplanar (triangulation diagonals) are
+skipped rather than collapsed to zero width.
+
+### Mesh relab
+
+Adds concentric rings inside a selected face region. Deliberately does not bevel an existing
+bevel — it inserts cuts *inside* a region, which is the separate operation.
+
+Uses its own outline walk rather than `MeshSelection.regionBoundaryEdges`, because that returns
+only edges with a face on both sides: a region in the corner of an open surface would silently
+miss two of its four sides and open a crack.
+
+### Transforms
+
+Move, rotate and scale, each following the camera so a drag always moves the selection the way
+it looks on screen. Scaling is uniform by default, with a panel on the opposite side of the
+screen from the toolbar to turn uniform off and lock to X, Y or Z.
+
+### Mirror
+
+Appends a mirrored copy with reversed winding, since mirroring turns a surface inside out.
+
+### Gestures
+
+The tools are gesture driven, matching how they work on a desktop, and the gestures live in
+`EditModeHost` rather than in the view so the toolbar stays a dumb column of buttons:
+
+| Tool | Gesture |
+| --- | --- |
+| Bevel | Tap the edge, long-press to commit, one-finger drag = 1 segment, two-finger scroll = N segments |
+| Loop cut | Tap the edge, drag to place the loop, two-finger scroll = N loops |
+| Knife | Drag a cut line across the viewport |
+| Mesh relab | Select faces, two-finger scroll = N rings |
+| Move / Rotate / Scale | Drag |
+
+A drag shows its result continuously but records exactly **one** undo step: the gesture
+snapshots the mesh up front, rewrites the live mesh as the finger moves, and pushes a single
+history entry when the finger lifts. Recording per frame would bury the real edit under
+hundreds of intermediate steps.
+
+### UI
+
+- Tapping any tool slides its name out beside the column for about a second, as a cancellable
+  tween rather than an animator chain — a rapid second tap restarts it instead of queueing.
+- All dimensions go through a single `dp()` that folds in device density *and* a scale factor
+  from the screen's shorter side, so a phone and a tablet both get a layout that fits rather
+  than a strip of cramped buttons on one and a postage stamp on the other. Text scales with
+  the same factor.
+- The transform panel sits on the opposite side of the screen from the toolbar, so the two
+  never compete for the same thumb.
+
+### Verifying
+
+```
+bash /home/user/.devkit/devkit-check.sh
+```
+
+Type-checks the kernel plus the Android bridge against structural stubs, then builds and runs
+the harness on a plain JVM. No Android SDK, no Gradle, no JUnit.
