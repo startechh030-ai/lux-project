@@ -21,7 +21,32 @@ jobs:
           java-version: '17'
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        # The runner image already ships the Android SDK, so android-actions/setup-android
+        # is not required. It is also broken on current images: it still runs
+        # `sdkmanager tools`, and the legacy "tools" package was removed from the SDK
+        # repository in cmdline-tools 16.0, which fails the job before anything builds.
+        # This step only makes sure `sdkmanager` is on PATH for the steps that follow.
+        shell: bash
+        run: |
+          set -euo pipefail
+          export ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          ls -1 "$ANDROID_HOME/cmdline-tools"
+          if [ -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
+            bin="$ANDROID_HOME/cmdline-tools/latest/bin"
+          else
+            # No `latest` alias: take the highest installed version, so this keeps working
+            # as the runner image ships newer ones.
+            bin="$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin | sort -V | tail -n1)"
+          fi
+          echo "Using sdkmanager at $bin"
+          echo "$bin" >> "$GITHUB_PATH"
+
+      - name: Accept Android SDK licenses
+        shell: bash
+        run: |
+          # Non-zero here does not always mean failure, so do not fail the build on it.
+          yes | sdkmanager --licenses > /dev/null || true
 
       - name: Install Android SDK packages
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
