@@ -60,7 +60,6 @@ class EditableMeshRenderer(
     private var wireEntity = 0
     private var selectionEntity = 0
     private var vertices: VertexBuffer? = null
-    private var normals: VertexBuffer? = null
     private var indices: IndexBuffer? = null
     private var wireVertices: VertexBuffer? = null
     private var wireIndices: IndexBuffer? = null
@@ -79,14 +78,26 @@ class EditableMeshRenderer(
 
     // -------------------------------------------------------------- surface
 
-    /** Pushes [mesh] to the GPU. Cheap when only positions moved and counts are stable. */
+    /**
+     * Pushes [mesh] to the GPU. Cheap when only positions moved and counts are stable.
+     *
+     * The vertex buffer carries **positions only**. Filament has no `NORMAL` vertex
+     * attribute — the enum is POSITION / TANGENTS / COLOR / UV0 / UV1 — and asking for one
+     * was an unresolved reference that failed the release build. Normals therefore come
+     * from the shader's screen-space derivatives, which shades each triangle flat. That is
+     * a reasonable look for an edit preview: the topology is legible, and the untouched
+     * asset is restored the moment Edit mode is left.
+     *
+     * Smooth shading would mean supplying TANGENTS as a packed FLOAT4 tangent frame, which
+     * needs a per-vertex tangent basis this mesh does not carry (there are no UVs to derive
+     * one from). Worth doing only if the faceted preview becomes a problem.
+     */
     fun update(mesh: EditMesh) {
         if (mesh.vertexCount == 0 || mesh.faceCount == 0) {
             clearSurface()
             return
         }
         val positionData = directFloatBuffer(mesh.positions)
-        val normalData = directFloatBuffer(mesh.normals ?: mesh.computeVertexNormals())
         val indexData = directIndexBuffer(mesh)
 
         if (mesh.vertexCount != cachedVertexCount || mesh.indices.size != cachedIndexCount) {
@@ -96,14 +107,10 @@ class EditableMeshRenderer(
 
             vertices = VertexBuffer.Builder()
                 .vertexCount(mesh.vertexCount)
-                .bufferCount(2)
+                .bufferCount(1)
                 .attribute(VertexBuffer.VertexAttribute.POSITION, 0, VertexBuffer.AttributeType.FLOAT3, 0, 12)
-                .attribute(VertexBuffer.VertexAttribute.NORMAL, 1, VertexBuffer.AttributeType.FLOAT3, 0, 12)
                 .build(engine)
-                .also {
-                    it.setBufferAt(engine, 0, positionData)
-                    it.setBufferAt(engine, 1, normalData)
-                }
+                .also { it.setBufferAt(engine, 0, positionData) }
 
             indices = IndexBuffer.Builder()
                 .indexCount(mesh.indices.size)
@@ -131,7 +138,6 @@ class EditableMeshRenderer(
             scene.addEntity(surfaceEntity)
         } else {
             vertices?.setBufferAt(engine, 0, positionData)
-            normals?.setBufferAt(engine, 1, normalData)
             indices?.setBuffer(engine, indexData)
         }
     }
@@ -347,7 +353,6 @@ class EditableMeshRenderer(
         indices?.let { engine.destroyIndexBuffer(it) }
         vertices = null
         indices = null
-        normals = null
         cachedVertexCount = -1
         cachedIndexCount = -1
     }

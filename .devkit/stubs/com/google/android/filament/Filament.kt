@@ -37,7 +37,12 @@ class Box(cx: Float, cy: Float, cz: Float, hx: Float, hy: Float, hz: Float) {
 }
 
 class VertexBuffer {
-    enum class VertexAttribute { POSITION, NORMAL, TANGENTS, COLOR, UV0, UV1 }
+    // Mirrors real Filament 1.69.x. NOTE: there is deliberately no NORMAL member —
+    // Filament carries normals inside TANGENTS (a FLOAT4 tangent frame) or derives them
+    // in the shader from derivatives. An earlier stub listed NORMAL and it hid a genuine
+    // compile error, so keep this list matching the real enum rather than "whatever is
+    // convenient".
+    enum class VertexAttribute { POSITION, TANGENTS, COLOR, UV0, UV1, BONE_INDICES, BONE_WEIGHTS }
     enum class AttributeType { FLOAT2, FLOAT3, FLOAT4, HALF2, HALF4, UBYTE4, SHORT4 }
     fun setBufferAt(engine: Engine, index: Int, buffer: ByteBuffer) {}
     class Builder {
