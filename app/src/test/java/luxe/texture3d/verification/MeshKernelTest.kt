@@ -177,6 +177,7 @@ object MeshKernelTest {
         testLoopCut()
         testBevel()
         testRelab()
+        testGizmo()
         testHistory()
         testMatricesAndCamera()
         testGltfExport()
@@ -615,6 +616,164 @@ object MeshKernelTest {
 
         check("exporting an empty mesh is rejected",
             runCatching { MeshGltfWriter.toGlb(EditMesh.empty()) }.isFailure)
+    }
+
+    // --- matrix helpers, used only to build a believable camera in the gizmo tests ---
+
+    private fun perspective(fovDeg: Float, aspect: Float, near: Float, far: Float): FloatArray {
+        val f = (1.0 / kotlin.math.tan(Math.toRadians(fovDeg.toDouble()) / 2.0)).toFloat()
+        return floatArrayOf(
+            f / aspect, 0f, 0f, 0f,
+            0f, f, 0f, 0f,
+            0f, 0f, (far + near) / (near - far), -1f,
+            0f, 0f, 2f * far * near / (near - far), 0f
+        )
+    }
+
+    private fun lookAt(
+        ex: Float, ey: Float, ez: Float, cx: Float, cy: Float, cz: Float
+    ): FloatArray {
+        var fx = cx - ex; var fy = cy - ey; var fz = cz - ez
+        val fl = kotlin.math.sqrt(fx * fx + fy * fy + fz * fz); fx /= fl; fy /= fl; fz /= fl
+        // up = (0,1,0)
+        var sx = fy * 0f - fz * 1f; var sy = fz * 0f - fx * 0f; var sz = fx * 1f - fy * 0f
+        val sl = kotlin.math.sqrt(sx * sx + sy * sy + sz * sz); sx /= sl; sy /= sl; sz /= sl
+        val ux = sy * fz - sz * fy; val uy = sz * fx - sx * fz; val uz = sx * fy - sy * fx
+        return floatArrayOf(
+            sx, ux, -fx, 0f,
+            sy, uy, -fy, 0f,
+            sz, uz, -fz, 0f,
+            -(sx * ex + sy * ey + sz * ez), -(ux * ex + uy * ey + uz * ez), fx * ex + fy * ey + fz * ez, 1f
+        )
+    }
+
+    private fun testGizmo() {
+        section("Gizmo")
+        val x = floatArrayOf(1f, 0f, 0f)
+        val y = floatArrayOf(0f, 1f, 0f)
+        val z = floatArrayOf(0f, 0f, 1f)
+        val axes = arrayOf(x, y, z)
+        val origin = floatArrayOf(0f, 0f, 0f)
+
+        // A ray fired sideways at the Y axis meets it at its own height.
+        val sideOn = GizmoMath.Ray(1f, 5f, 0f, -1f, 0f, 0f)
+        checkApprox("axis parameter is the height the ray meets", 5f,
+            GizmoMath.axisParameter(sideOn, 0f, 0f, 0f, y), 1e-4f)
+
+        // Sliding that ray along Y by 2 must report a move of exactly 2.
+        val slidUp = GizmoMath.Ray(1f, 7f, 0f, -1f, 0f, 0f)
+        checkApprox("move delta is the slide along the axis", 2f,
+            GizmoMath.moveDelta(origin, y, sideOn, slidUp), 1e-4f)
+        checkApprox("dragging the other way is negative", -2f,
+            GizmoMath.moveDelta(origin, y, slidUp, sideOn), 1e-4f)
+
+        // An offset centre must not change the delta, only where it is measured from.
+        val moved = floatArrayOf(10f, 0f, -3f)
+        checkApprox("move delta ignores where the gizmo sits", 2f,
+            GizmoMath.moveDelta(moved, y,
+                GizmoMath.Ray(11f, 5f, -3f, -1f, 0f, 0f),
+                GizmoMath.Ray(11f, 7f, -3f, -1f, 0f, 0f)), 1e-4f)
+
+        // Looking straight down the axis has no answer, and must not fling the object.
+        checkApprox("a ray down the axis holds still", 0f,
+            GizmoMath.axisParameter(GizmoMath.Ray(0f, -10f, 0f, 0f, 1f, 0f), 0f, 0f, 0f, y), 1e-9f)
+
+        // Rotation: dragging from +X round to +Z is a quarter turn about +Y.
+        val fromX = GizmoMath.Ray(1f, 10f, 0f, 0f, -1f, 0f)
+        val toZ = GizmoMath.Ray(0f, 10f, 1f, 0f, -1f, 0f)
+        checkApprox("a quarter turn about Y is -90 degrees",
+            -(Math.PI / 2).toFloat(), GizmoMath.rotateAngle(origin, y, fromX, toZ), 1e-4f)
+        checkApprox("turning back the other way is +90 degrees",
+            (Math.PI / 2).toFloat(), GizmoMath.rotateAngle(origin, y, toZ, fromX), 1e-4f)
+        checkApprox("not moving does not rotate", 0f,
+            GizmoMath.rotateAngle(origin, y, fromX, fromX), 1e-4f)
+
+        // Scale: doubling the radius doubles the object.
+        val near = GizmoMath.Ray(1f, 0f, 10f, 0f, 0f, -1f)
+        val far = GizmoMath.Ray(2f, 0f, 10f, 0f, 0f, -1f)
+        checkApprox("dragging outward doubles the scale", 2f,
+            GizmoMath.scaleFactor(origin, z, near, far), 1e-4f)
+        checkApprox("dragging inward halves the scale", 0.5f,
+            GizmoMath.scaleFactor(origin, z, far, near), 1e-4f)
+        checkApprox("holding still does not scale", 1f,
+            GizmoMath.scaleFactor(origin, z, near, near), 1e-4f)
+
+        // Picking: a ray straight at the middle of the Y shaft grabs Y, not X or Z.
+        check("a tap on the Y shaft grabs Y",
+            GizmoMath.pickAxis(GizmoMath.Ray(10f, 0.5f, 0f, -1f, 0f, 0f), 0f, 0f, 0f, axes, 1f, 0.1f) == GizmoMath.Axis.Y)
+        check("a tap on the X shaft grabs X",
+            GizmoMath.pickAxis(GizmoMath.Ray(0.5f, 10f, 0f, 0f, -1f, 0f), 0f, 0f, 0f, axes, 1f, 0.1f) == GizmoMath.Axis.X)
+        check("a tap in empty space grabs nothing",
+            GizmoMath.pickAxis(GizmoMath.Ray(10f, 4f, 4f, -1f, 0f, 0f), 0f, 0f, 0f, axes, 1f, 0.1f) == null)
+
+        // Rings: the Y ring is the one lying in the XZ plane, so aim at a point that is on
+        // that ring and on no other. (Straight down an axis would lie in two rings at once.)
+        check("a tap on the XZ ring grabs Y",
+            GizmoMath.pickRing(GizmoMath.Ray(0.7071f, 5f, 0.7071f, 0f, -1f, 0f), 0f, 0f, 0f, axes, 1f, 0.1f) == GizmoMath.Axis.Y)
+        check("a tap on the XY ring grabs Z",
+            GizmoMath.pickRing(GizmoMath.Ray(0.7071f, 0.7071f, 5f, 0f, 0f, -1f), 0f, 0f, 0f, axes, 1f, 0.1f) == GizmoMath.Axis.Z)
+
+        // Screen-constant sizing: twice as far away needs twice the world size.
+        val nearSize = GizmoMath.worldSizeForPixels(100f, 5f, 0.5f, 1000)
+        val farSize = GizmoMath.worldSizeForPixels(100f, 10f, 0.5f, 1000)
+        checkApprox("the gizmo scales with distance", 2f, farSize / nearSize, 1e-4f)
+        // At distance 5 with tan(fov/2) = 0.5 the view is 5 units tall, so 100 of 1000
+        // pixels is a tenth of that.
+        checkApprox("screen size is exact at a known distance", 0.5f, nearSize, 1e-4f)
+
+        // Screen rays. Built from a real projection so the camera maths is exercised, not
+        // just the matrix plumbing: a camera 5 units back looking at the origin.
+        val vp = GizmoMath.multiply4x4(perspective(90f, 1f, 0.1f, 100f), lookAt(0f, 0f, 5f, 0f, 0f, 0f))
+        val invVP = GizmoMath.invert4x4(vp)
+        // The one-call form the activity uses must agree with building it by hand.
+        checkApprox("rayFromCameraMatrices agrees with the long way round", 0f,
+            GizmoMath.rayFromCameraMatrices(0.3f, 0.2f,
+                perspective(90f, 1f, 0.1f, 100f), lookAt(0f, 0f, 5f, 0f, 0f, 0f)).ox -
+            GizmoMath.rayFromScreen(0.3f, 0.2f, invVP).ox, 1e-3f)
+        checkApprox("inverting a matrix then multiplying gives the identity", 1f,
+            GizmoMath.multiply4x4(vp, invVP)[0], 1e-4f)
+        val centre = GizmoMath.rayFromScreen(0f, 0f, invVP)
+        checkApprox("the centre pixel looks straight down -Z", -1f, centre.dz, 1e-4f)
+        checkApprox("the centre pixel does not drift sideways", 0f, centre.dx, 1e-4f)
+        checkApprox("the ray starts on the near plane", 4.9f, centre.oz, 1e-4f)
+        // At 90 degrees the right edge is 45 degrees off axis.
+        val edge = GizmoMath.rayFromScreen(1f, 0f, invVP)
+        checkApprox("the right edge ray is 45 degrees off axis", 0.7071f, edge.dx, 1e-3f)
+        checkApprox("the right edge ray still points into the scene", -0.7071f, edge.dz, 1e-3f)
+        // The far end of the ray must be beyond the near end, or picking is inverted.
+        val farEnd = FloatArray(3)
+        GizmoMath.unproject(0f, 0f, 1f, invVP, farEnd)
+        check("the far plane is farther than the near plane", farEnd[2] < centre.oz)
+
+        // A gizmo grabbed from this camera must respond to a sideways drag.
+        val dragA = GizmoMath.rayFromScreen(0f, 0f, invVP)
+        val dragB = GizmoMath.rayFromScreen(0.2f, 0f, invVP)
+        check("dragging right moves the object right",
+            GizmoMath.moveDelta(origin, x, dragA, dragB) > 0f)
+
+        // The gizmo must follow the object's own axes, not the world's.
+        val flat = GizmoMath.quaternionToBasis(floatArrayOf(0f, 0f, 0f, 1f))
+        checkApprox("an unrotated object has the world X axis", 1f, flat[0][0], 1e-6f)
+        checkApprox("an unrotated object has the world Y axis", 1f, flat[1][1], 1e-6f)
+        checkApprox("an unrotated object has the world Z axis", 1f, flat[2][2], 1e-6f)
+        // A quarter turn about +Y sends +X to -Z and +Z to +X.
+        val turned = GizmoMath.quaternionToBasis(floatArrayOf(0f, 0.7071068f, 0f, 0.7071068f))
+        checkApprox("a quarter turn about Y sends X to -Z", -1f, turned[0][2], 1e-5f)
+        checkApprox("a quarter turn about Y sends Z to +X", 1f, turned[2][0], 1e-5f)
+        checkApprox("a quarter turn about Y leaves Y alone", 1f, turned[1][1], 1e-5f)
+        // The basis must stay orthonormal or the handles skew as the object turns.
+        var orthonormal = true
+        for (i in 0..2) for (j in 0..2) {
+            val dot = (0..2).sumOf { (turned[i][it] * turned[j][it]).toDouble() }.toFloat()
+            val want = if (i == j) 1f else 0f
+            if (kotlin.math.abs(dot - want) > 1e-5f) orthonormal = false
+        }
+        check("a rotated basis stays orthonormal", orthonormal)
+
+        // Blender ordering, so the handles are the colours everyone expects.
+        check("X is red", GizmoMath.axisColor(GizmoMath.Axis.X)[0] > 0.8f)
+        check("Y is green", GizmoMath.axisColor(GizmoMath.Axis.Y)[1] > 0.8f)
+        check("Z is blue", GizmoMath.axisColor(GizmoMath.Axis.Z)[2] > 0.8f)
     }
 
     private fun testHistory() {

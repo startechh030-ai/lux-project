@@ -38,6 +38,7 @@ $KOTLINC -nowarn \
   "$ROOT/app/src/main/java/luxe/texture3d/app/EditableMeshRenderer.kt" \
   "$ROOT/app/src/main/java/luxe/texture3d/app/EditModeController.kt" \
   "$ROOT/app/src/main/java/luxe/texture3d/app/EditModeUi.kt" \
+  "$ROOT/app/src/main/java/luxe/texture3d/app/GizmoMath.kt" \
   -d "$OUT/classes"
 echo "    ok — 13 sources + stubs compiled"
 
@@ -50,6 +51,7 @@ $KOTLINC -nowarn \
   "$ROOT/app/src/main/java/luxe/texture3d/app/MeshRaycast.kt" \
   "$ROOT/app/src/main/java/luxe/texture3d/app/MeshHistory.kt" \
   "$ROOT/app/src/main/java/luxe/texture3d/app/MeshGltfWriter.kt" \
+  "$ROOT/app/src/main/java/luxe/texture3d/app/GizmoMath.kt" \
   "$ROOT/app/src/test/java/luxe/texture3d/verification/MeshKernelTest.kt" \
   -include-runtime -d "$OUT/meshkernel.jar"
 

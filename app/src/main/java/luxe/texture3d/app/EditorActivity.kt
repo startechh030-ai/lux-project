@@ -44,6 +44,16 @@ class EditorActivity : AppCompatActivity(), Choreographer.FrameCallback {
     private lateinit var editorGrid: EditorGrid
     private lateinit var sceneManager: EditorSceneManager
     private lateinit var selectionBounds: SelectionBoundsRenderer
+    // Transform gizmo: Blender-style axis handles, driven entirely by GizmoMath.
+    private var gizmo: EditorGizmo? = null
+    private var shading: ShadingController? = null
+    private var gizmoMode = GizmoMath.Mode.MOVE
+    private var dragAxis: GizmoMath.Axis? = null
+    private var dragRay: GizmoMath.Ray? = null
+    private var dragPosition = FloatArray(3)
+    private var dragRotation = FloatArray(4)
+    private var dragScale = FloatArray(3)
+    private var boundSelection: String? = null
     private val mainHandler=Handler(Looper.getMainLooper())
     private lateinit var status: TextView
     private lateinit var saveButton: TextView
@@ -106,6 +116,10 @@ class EditorActivity : AppCompatActivity(), Choreographer.FrameCallback {
         root.addView(sceneList,FrameLayout.LayoutParams(dp(78),dp(36),Gravity.TOP or Gravity.START).apply{leftMargin=dp(10);topMargin=dp(150)})
         val transformButton=TextView(this).apply{text="Transform";textSize=11f;gravity=Gravity.CENTER;setTextColor(Color.WHITE);setBackgroundResource(R.drawable.hub_secondary_button);setOnClickListener{showTransformDialog()}}
         root.addView(transformButton,FrameLayout.LayoutParams(dp(78),dp(36),Gravity.TOP or Gravity.START).apply{leftMargin=dp(10);topMargin=dp(190)})
+        root.addView(sceneControl("Grab",{setGizmoMode(GizmoMath.Mode.MOVE)}),FrameLayout.LayoutParams(dp(78),dp(36),Gravity.TOP or Gravity.START).apply{leftMargin=dp(10);topMargin=dp(230)})
+        root.addView(sceneControl("Rotate",{setGizmoMode(GizmoMath.Mode.ROTATE)}),FrameLayout.LayoutParams(dp(78),dp(36),Gravity.TOP or Gravity.START).apply{leftMargin=dp(10);topMargin=dp(270)})
+        root.addView(sceneControl("Scale",{setGizmoMode(GizmoMath.Mode.SCALE)}),FrameLayout.LayoutParams(dp(78),dp(36),Gravity.TOP or Gravity.START).apply{leftMargin=dp(10);topMargin=dp(310)})
+        root.addView(sceneControl("Shading",{val m=shading?.toggle();android.widget.Toast.makeText(this,"Shading: ${'$'}m",android.widget.Toast.LENGTH_SHORT).show()}),FrameLayout.LayoutParams(dp(78),dp(36),Gravity.TOP or Gravity.START).apply{leftMargin=dp(10);topMargin=dp(350)})
         developerControls += listOf(addModel, removeModel, sceneList, transformButton)
 
         saveButton = TextView(this).apply {
@@ -183,6 +197,11 @@ class EditorActivity : AppCompatActivity(), Choreographer.FrameCallback {
         )
         selectionBounds=SelectionBoundsRenderer(viewer.engine,viewer.scene,readAsset("materials/luxe_lines.filamat"))
         sceneManager = EditorSceneManager(viewer.engine,viewer.scene,{if(!suppressSceneDirty){projectSession?.markDirty();if(::saveButton.isInitialized)saveButton.text="Save •"}},{record->if(record==null)selectionBounds.clear()else selectionBounds.show(record.worldCenter,record.worldHalfExtent)})
+        gizmo = EditorGizmo(viewer.engine, viewer.scene, readAsset("materials/luxe_lines.filamat"))
+        shading = ShadingController(viewer.engine, viewer.scene)
+        // Runs before CameraInputView's own onTouchEvent, so a touch that lands on a handle
+        // is spent on the gizmo and everything else still reaches the camera.
+        cameraInput.setOnTouchListener { _, event -> onGizmoTouch(event) }
         cameraInput.inputEnabled = true
 
         intent.getStringExtra(EXTRA_PROJECT_PATH)?.let { openProjectSession(it) }
@@ -221,6 +240,162 @@ class EditorActivity : AppCompatActivity(), Choreographer.FrameCallback {
     private fun quaternionFromEuler(degrees:FloatArray):FloatArray{val x=Math.toRadians(degrees[0].toDouble())*.5;val y=Math.toRadians(degrees[1].toDouble())*.5;val z=Math.toRadians(degrees[2].toDouble())*.5;val cx=kotlin.math.cos(x);val sx=kotlin.math.sin(x);val cy=kotlin.math.cos(y);val sy=kotlin.math.sin(y);val cz=kotlin.math.cos(z);val sz=kotlin.math.sin(z);return floatArrayOf((sx*cy*cz-cx*sy*sz).toFloat(),(cx*sy*cz+sx*cy*sz).toFloat(),(cx*cy*sz-sx*sy*cz).toFloat(),(cx*cy*cz+sx*sy*sz).toFloat())}
     private fun quaternionToEuler(q:FloatArray):FloatArray{val x=q[0].toDouble();val y=q[1].toDouble();val z=q[2].toDouble();val w=q[3].toDouble();val roll=kotlin.math.atan2(2*(w*x+y*z),1-2*(x*x+y*y));val sinp=(2*(w*y-z*x)).coerceIn(-1.0,1.0);val pitch=kotlin.math.asin(sinp);val yaw=kotlin.math.atan2(2*(w*z+x*y),1-2*(y*y+z*z));return floatArrayOf(Math.toDegrees(roll).toFloat(),Math.toDegrees(pitch).toFloat(),Math.toDegrees(yaw).toFloat())}
     private fun duplicateSelected(){val source=sceneManager.selected()?:return;val uid="instance-${java.util.UUID.randomUUID()}";val file=File(source.source).takeIf{it.isAbsolute}?:projectSession?.let{File(it.sessionDir,source.source)}?:return;val copy=runCatching{if(file.isDirectory)sceneManager.addGltf(file,"${source.name} Copy",uid)else{val size=file.length();sceneManager.addGlb(readDirectBuffer(Uri.fromFile(file),size),"${source.name} Copy",source.source,uid)}}.getOrElse{Toast.makeText(this,it.message?:"Duplicate failed",Toast.LENGTH_LONG).show();return};val position=source.position.copyOf();position[0]+=.25f;sceneManager.setTransform(copy.uid,position,source.rotation,source.scale);sceneManager.select(copy.uid)}
+
+    // ------------------------------------------------------------ gizmo
+
+    /** Arms the gizmo for one of the three tools. Pressing the button is what activates it. */
+    private fun setGizmoMode(mode: GizmoMath.Mode) {
+        gizmoMode = mode
+        gizmo?.mode = mode
+    }
+
+    /**
+     * Keeps the gizmo sitting on the selection at a comfortable on-screen size.
+     *
+     * Sized to hold roughly a constant number of pixels, but never smaller than the object
+     * itself — otherwise the handles disappear inside a large model.
+     */
+    private fun updateGizmo() {
+        val g = gizmo ?: return
+        val record = sceneManager.selected()
+        if (record == null) { g.visible = false; boundSelection = null; shading?.bind(null); return }
+        g.visible = true
+        if (boundSelection != record.uid) { boundSelection = record.uid; shading?.bind(record.asset) }
+        val view = GizmoMath.toFloat16(viewer.camera.viewMatrix)
+        val proj = GizmoMath.toFloat16(viewer.camera.projectionMatrix)
+        val eye = GizmoMath.invert4x4(view)
+        val dx = record.worldCenter[0] - eye[12]
+        val dy = record.worldCenter[1] - eye[13]
+        val dz = record.worldCenter[2] - eye[14]
+        val distance = kotlin.math.sqrt(dx * dx + dy * dy + dz * dz).coerceAtLeast(0.001f)
+        // For a perspective matrix, m[5] is 1/tan(fovY/2).
+        val tanHalfFovY = if (proj[5] != 0f) 1f / proj[5] else 0.5f
+        val byPixels = GizmoMath.worldSizeForPixels(150f, distance, tanHalfFovY, surface.height.coerceAtLeast(1))
+        val byObject = maxOf(record.worldHalfExtent[0], record.worldHalfExtent[1], record.worldHalfExtent[2]) * 1.15f
+        g.place(record.worldCenter[0], record.worldCenter[1], record.worldCenter[2],
+            GizmoMath.quaternionToBasis(record.rotation), maxOf(byPixels, byObject))
+    }
+
+    /** The world ray leaving the camera under a screen point, in Android view coordinates. */
+    private fun screenRay(x: Float, y: Float): GizmoMath.Ray? {
+        if (!::viewer.isInitialized) return null
+        val w = surface.width.coerceAtLeast(1)
+        val h = surface.height.coerceAtLeast(1)
+        val ndcX = (x / w) * 2f - 1f
+        val ndcY = 1f - (y / h) * 2f
+        return GizmoMath.rayFromCameraMatrices(ndcX, ndcY,
+            GizmoMath.toFloat16(viewer.camera.projectionMatrix),
+            GizmoMath.toFloat16(viewer.camera.viewMatrix))
+    }
+
+    /**
+     * Handles a touch that may belong to the gizmo.
+     *
+     * Returns true only once a handle has actually been grabbed, so the very same gesture
+     * that misses the handles still orbits the camera — the gizmo is never in the way.
+     */
+    private fun onGizmoTouch(event: android.view.MotionEvent): Boolean {
+        val g = gizmo ?: return false
+        if (!g.visible) return false
+        val record = sceneManager.selected() ?: return false
+        if (record.locked) return false
+        when (event.actionMasked) {
+            android.view.MotionEvent.ACTION_DOWN -> {
+                if (event.pointerCount != 1) return false
+                val ray = screenRay(event.x, event.y) ?: return false
+                val axis = g.hitTest(ray) ?: return false
+                dragAxis = axis
+                dragRay = ray
+                dragPosition = record.position.copyOf()
+                dragRotation = record.rotation.copyOf()
+                dragScale = record.scale.copyOf()
+                g.mode = gizmoMode
+                g.setHighlight(axis)
+                return true
+            }
+            android.view.MotionEvent.ACTION_MOVE -> {
+                val axis = dragAxis ?: return false
+                val start = dragRay ?: return false
+                if (event.pointerCount != 1) return true
+                val ray = screenRay(event.x, event.y) ?: return true
+                applyDrag(record, axis, start, ray)
+                return true
+            }
+            android.view.MotionEvent.ACTION_UP,
+            android.view.MotionEvent.ACTION_CANCEL,
+            android.view.MotionEvent.ACTION_POINTER_DOWN -> {
+                if (dragAxis != null) { g.setHighlight(null); dragAxis = null; dragRay = null; return true }
+                return false
+            }
+        }
+        return false
+    }
+
+    /** Turns a drag on one handle into a new transform on [record]. */
+    private fun applyDrag(
+        record: EditorSceneManager.Record,
+        axis: GizmoMath.Axis,
+        from: GizmoMath.Ray,
+        to: GizmoMath.Ray
+    ) {
+        val center = record.worldCenter
+        val basis = GizmoMath.quaternionToBasis(dragRotation)
+        val position = dragPosition.copyOf()
+        val rotation = dragRotation.copyOf()
+        val scale = dragScale.copyOf()
+        when (gizmoMode) {
+            GizmoMath.Mode.MOVE -> {
+                // The world axis the handle points along, for the object's own orientation.
+                for (i in 0..2) {
+                    val dir = basis[i]
+                    val delta = GizmoMath.moveDelta(center, dir, from, to)
+                    when (axis) {
+                        GizmoMath.Axis.X -> if (i == 0) { position[0] += dir[0] * delta; position[1] += dir[1] * delta; position[2] += dir[2] * delta }
+                        GizmoMath.Axis.Y -> if (i == 1) { position[0] += dir[0] * delta; position[1] += dir[1] * delta; position[2] += dir[2] * delta }
+                        GizmoMath.Axis.Z -> if (i == 2) { position[0] += dir[0] * delta; position[1] += dir[1] * delta; position[2] += dir[2] * delta }
+                        else -> {}
+                    }
+                }
+            }
+            GizmoMath.Mode.ROTATE -> {
+                for (i in 0..2) {
+                    val want = when (axis) { GizmoMath.Axis.X -> 0; GizmoMath.Axis.Y -> 1; GizmoMath.Axis.Z -> 2; else -> -1 }
+                    if (want == i) rotation[i] // keep the compiler honest about the mapping
+                    if (want != i) continue
+                    val dir = basis[i]
+                    val angle = GizmoMath.rotateAngle(center, dir, from, to)
+                    val half = angle * 0.5f
+                    val s = kotlin.math.sin(half.toDouble()).toFloat()
+                    val q = floatArrayOf(dir[0] * s, dir[1] * s, dir[2] * s, kotlin.math.cos(half.toDouble()).toFloat())
+                    val composed = composeQuaternions(q, dragRotation)
+                    for (k in 0..3) rotation[k] = composed[k]
+                }
+            }
+            GizmoMath.Mode.SCALE -> {
+                val dir = when (axis) { GizmoMath.Axis.X -> basis[0]; GizmoMath.Axis.Y -> basis[1]; GizmoMath.Axis.Z -> basis[2]; else -> basis[0] }
+                val factor = GizmoMath.scaleFactor(center, dir, from, to)
+                when (axis) {
+                    GizmoMath.Axis.X -> scale[0] = (dragScale[0] * factor).coerceIn(0.001f, 1000f)
+                    GizmoMath.Axis.Y -> scale[1] = (dragScale[1] * factor).coerceIn(0.001f, 1000f)
+                    GizmoMath.Axis.Z -> scale[2] = (dragScale[2] * factor).coerceIn(0.001f, 1000f)
+                    else -> for (k in 0..2) scale[k] = (dragScale[k] * factor).coerceIn(0.001f, 1000f)
+                }
+            }
+        }
+        sceneManager.setTransform(record.uid, position, rotation, scale)
+    }
+
+    /** `a` applied on top of `b`, so the object turns about its own axes as it is dragged. */
+    private fun composeQuaternions(a: FloatArray, b: FloatArray): FloatArray {
+        val ax = a[0]; val ay = a[1]; val az = a[2]; val aw = a[3]
+        val bx = b[0]; val by = b[1]; val bz = b[2]; val bw = b[3]
+        return floatArrayOf(
+            aw * bx + ax * bw + ay * bz - az * by,
+            aw * by - ax * bz + ay * bw + az * bx,
+            aw * bz + ax * by - ay * bx + az * bw,
+            aw * bw - ax * bx - ay * by - az * bz
+        )
+    }
 
     private fun pickScene(x:Float,y:Float){if(!::viewer.isInitialized||!::sceneManager.isInitialized)return;viewer.view.pick(x.toInt(),surface.height-y.toInt(),mainHandler){result->if(result.renderable==0)sceneManager.clearSelection()else sceneManager.selectByEntity(result.renderable)}}
     private fun sceneControl(label:String,action:()->Unit)=TextView(this).apply{text=label;gravity=Gravity.CENTER;textSize=11f;setTextColor(0xffd5dbe4.toInt());setBackgroundResource(R.drawable.hub_secondary_button);setOnClickListener{action()}}
@@ -431,6 +606,7 @@ class EditorActivity : AppCompatActivity(), Choreographer.FrameCallback {
         if (!rendering) return
         if(::sceneManager.isInitialized)sceneManager.update()
         // ModelViewer presents the shared Scene; EditorSceneManager owns its multiple glTF assets.
+        updateGizmo()
         viewer.render(frameTimeNanos)
         Choreographer.getInstance().postFrameCallback(this)
     }

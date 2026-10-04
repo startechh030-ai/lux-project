@@ -3,6 +3,7 @@ package com.google.android.filament
 import java.nio.ByteBuffer
 
 class Engine {
+    fun getRenderableManager(): RenderableManager = RenderableManager()
     val transformManager: TransformManager = TransformManager()
     fun destroyEntity(entity: Int) {}
     fun destroyVertexBuffer(buffer: VertexBuffer) {}
@@ -64,6 +65,12 @@ class IndexBuffer {
 }
 
 class RenderableManager {
+    fun hasComponent(entity: Int): Boolean = true
+    fun getInstance(entity: Int): Int = entity
+    fun getPrimitiveCount(instance: Int): Int = 1
+    fun getMaterialInstanceAt(instance: Int, slot: Int): MaterialInstance = MaterialInstance()
+    fun setMaterialInstanceAt(instance: Int, slot: Int, mi: MaterialInstance) {}
+    fun setTransform(instance: Int, matrix: FloatArray) {}
     enum class PrimitiveType { POINTS, LINES, LINE_STRIP, TRIANGLES }
     class Builder(count: Int) {
         fun boundingBox(box: Box): Builder = this
@@ -77,6 +84,9 @@ class RenderableManager {
 }
 
 class MaterialInstance {
+    // UNVERIFIED: whether MaterialInstance exposes the Material that made it. Flagged in
+    // ShadingController.solidOf — if the Android build fails there, this is why.
+    fun getMaterial(): Material = Material()
     fun setParameter(name: String, x: Float, y: Float, z: Float, w: Float) {}
     fun setParameter(name: String, x: Float, y: Float, z: Float) {}
     fun setParameter(name: String, value: Float) {}
